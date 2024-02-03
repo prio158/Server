@@ -457,7 +457,7 @@ namespace Server {
 
         void
         format(std::shared_ptr<Logger> logger, LogLevel::Level level, std::ostream &os, LogEvent::ptr event) override {
-            os << logger->getName();
+            os << event->getLogger()->getName();
         }
     };
 
@@ -484,16 +484,25 @@ namespace Server {
 
     class DateTimeFormatItem : public FormatItem {
     public:
-        explicit DateTimeFormatItem(std::string format = "%Y:%m:%d %H:%M:%S") : m_format(std::move(format)) {}
+        explicit DateTimeFormatItem(std::string format = "%Y-%m-%d %H:%M:%S")
+                : m_format(std::move(format)) {
+            if (m_format.empty()) {
+                m_format = "%Y-%m-%d %H:%M:%S";
+            }
+        }
 
         void
         format(std::shared_ptr<Logger> logger, LogLevel::Level level, std::ostream &os, LogEvent::ptr event) override {
-            os << event->getTime();
+            struct tm tm;
+            time_t time = event->getTime();
+            localtime_r(&time, &tm);
+            char buf[64];
+            strftime(buf, sizeof(buf), m_format.c_str(), &tm);
+            os << buf;
         }
 
     private:
         std::string m_format;
-
     };
 
     class FileNameFormatItem : public FormatItem {

@@ -22,6 +22,9 @@ int main() {
             2,
             time(nullptr),
             "TestLog"));
+
+    event->getSS() << "Hello Crash";
+
     /** 4、log 打印*/
     logger->log(Server::LogLevel::DEBUG, event);
 
