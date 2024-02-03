@@ -4,223 +4,288 @@
 
 #include "Log.h"
 
+#include <memory>
 #include <utility>
 
-const char *ServerDemo::LogLevel::ToString(ServerDemo::LogLevel::Level level) {
-    switch (level) {
+
+namespace Server {
+
+    const char *LogLevel::ToString(LogLevel::Level level) {
+        switch (level) {
 #define XX(name) \
-        case ServerDemo::LogLevel::name: \
+        case LogLevel::name: \
              return #name;               \
              break;
 
-        XX(DEBUG)
-        XX(INFO)
-        XX(WARN)
-        XX(ERROR)
-        XX(FATAL)
+            XX(DEBUG)
+            XX(INFO)
+            XX(WARN)
+            XX(ERROR)
+            XX(FATAL)
 #undef XX
-        default:
-            return "UNKOWN";
-    }
-}
-
-
-void ServerDemo::LogAppender::log(const std::shared_ptr<Logger> &logger, ServerDemo::LogLevel::Level level,
-                                  const ServerDemo::LogEvent::ptr &event) {
-
-}
-
-
-ServerDemo::LogFormatter::LogFormatter(std::string pattern) : m_pattern(std::move(pattern)) {}
-
-std::string ServerDemo::LogFormatter::format(const std::shared_ptr<Logger> &logger, LogLevel::Level level,
-                                             const ServerDemo::LogEvent::ptr &event) {
-    std::stringstream ss;
-    for (auto &item: m_items) {
-        item->format(logger, level, ss, event);
-    }
-    return ss.str();
-}
-
-/** 解析字符串m_pattern: %xxx{xxx} %%*/
-void ServerDemo::LogFormatter::init() {
-    //string,format,type
-    std::vector<std::tuple<std::string, std::string, int>> vec;
-    //size_t last_pos = 0;
-    std::string nstr;
-    for (size_t i = 0; i < m_pattern.size(); i++) {
-
-        if (m_pattern[i] != '%') {
-            nstr.append(1, m_pattern[i]);
-            continue;
+            default:
+                return "UNKOWN";
         }
+    }
 
-        if (i + 1 < m_pattern.size()) {
-            if (m_pattern[i + 1] == '%') {
-                nstr.append(1, '%');
+    LogEvent::LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char *file, uint32_t line,
+                       uint32_t elapse, uint32_t thread_id, uint32_t fiber_id, uint64_t time,
+                       std::string thread_name)
+            : m_file(file), m_line(line), m_elapse(elapse), m_threadId(thread_id), m_fiberId(fiber_id), m_time(time),
+              m_threadName(std::move(thread_name)), m_logger(std::move(logger)), m_level(level) {
+    }
+
+    void LogEvent::format(const char *fmt, ...) {
+
+    }
+
+    void LogEvent::format(const char *fmt, va_list al) {
+
+    }
+
+
+    LogFormatter::LogFormatter(std::string pattern) : m_pattern(std::move(pattern)) {
+        init();
+    }
+
+    std::string LogFormatter::format(const std::shared_ptr<Logger> &logger, LogLevel::Level level,
+                                     const LogEvent::ptr &event) {
+        std::stringstream ss;
+        for (auto &item: m_items) {
+            item->format(logger, level, ss, event);
+        }
+        return ss.str();
+    }
+
+    /** 解析字符串m_pattern: %xxx{ xxx} %%*/
+    /**eg: "%d [%p] %f %m %n"*/
+    void LogFormatter::init() {
+        //string,format,type
+        std::vector<std::tuple<std::string, std::string, int>> vec;
+        std::string nstr;
+        for (size_t i = 0; i < m_pattern.size(); i++) {
+            if (m_pattern[i] != '%') {
+                nstr.append(1, m_pattern[i]);
                 continue;
             }
-        }
 
-        size_t n = i + 1;
-        int fmt_status = 0;
-        std::string str;
-        std::string fmt;
-        size_t fmt_begin = 0;
-        while (n < m_pattern.size()) {
-            if (isspace(m_pattern[n])) {
-                break;
-            }
-            if (fmt_status == 0) {
-                if (m_pattern[n] == '{') {
-                    str = m_pattern.substr(i + 1, n - i - 1);
-                    fmt_status = 1; //解析格式
-                    n++;
-                    fmt_begin = n;
+            if ((i + 1) < m_pattern.size()) {
+                if (m_pattern[i + 1] == '%') {
+                    nstr.append(1, '%');
                     continue;
                 }
             }
-            if (fmt_status == 1) {
-                if (m_pattern[n] == '}') {
-                    fmt = m_pattern.substr(fmt_begin + 1, n - fmt_begin - 1);
-                    fmt_status = 2;
+
+            size_t n = i + 1;
+            int fmt_status = 0;
+            size_t fmt_begin = 0;
+            std::string str;
+            std::string fmt;
+            while (n < m_pattern.size()) {
+                if (!fmt_status && (!isalpha(m_pattern[n]) && m_pattern[n] != '{'
+                                    && m_pattern[n] != '}')) {
+                    str = m_pattern.substr(i + 1, n - i - 1);
                     break;
                 }
+
+                if (fmt_status == 0) {
+                    if (m_pattern[n] == '{') {
+                        str = m_pattern.substr(i + 1, n - i - 1);
+                        fmt_status = 1;
+                        fmt_begin = n;
+                        n++;
+                        continue;
+                    }
+                } else if (fmt_status == 1) {
+                    if (m_pattern[n] == '}') {
+                        fmt = m_pattern.substr(fmt_begin + 1, n - fmt_begin - 1);
+                        fmt_status = 0;
+                        ++n;
+                        break;
+                    }
+                }
+                ++n;
+                if (n == m_pattern.size()) {
+                    if (str.empty()) {
+                        str = m_pattern.substr(i + 1);
+                    }
+                }
+            }
+
+            if (fmt_status == 0) {
+                if (!nstr.empty()) {
+                    vec.emplace_back(nstr, "", 0);
+                    nstr.clear();
+                }
+                vec.emplace_back(str, fmt, 1);
+                i = n - 1;
+            } else if (fmt_status == 1) {
+                std::cout << "pattern parse error: " << m_pattern << "-" << m_pattern.substr(i) << std::endl;
+                vec.emplace_back("<<pattern error>>", fmt, 0);
+                m_error = true;
             }
         }
-        if (fmt_status == 0) {
-            if (!nstr.empty())
-                vec.emplace_back(nstr, "", 0);
-            nstr = m_pattern.substr(i + 1, n - i - 1);
-            vec.emplace_back(nstr, fmt, 1);
-            i = n;
-        } else if (fmt_status == 1) {
-            std::cout << "pattern parse error: " << m_pattern << "-" << m_pattern.substr(i) << std::endl;
-            vec.emplace_back("<pattern error>", fmt, 0);
-        } else {
-            if (!nstr.empty())
-                vec.emplace_back(nstr, "", 0);
-            vec.emplace_back(nstr, fmt, 1);
-            i = n;
+
+        if (!nstr.empty()) {
+            vec.emplace_back(nstr, "", 0);
         }
-    }
 
-    if (!nstr.empty()) {
-        vec.emplace_back(nstr, "", 0);
-    }
-
-    /**
-     * %m -- 消息体
-     * %p -- level
-     * %r -- 启动后时间
-     * %c -- 日志名称
-     * %t -- 线程 Id
-     * %n -- 回车换行
-     * %d -- 时间
-     * %f -- 文件名
-     * %l -- 行号
- * */
-    static std::map<std::string, std::function<FormatItem::ptr(const std::string &str)>> s_format_items = {
+        /**
+         * %m -- 消息体
+         * %p -- level
+         * %r -- 启动后时间
+         * %c -- 日志名称
+         * %t -- 线程 Id
+         * %n -- 回车换行
+         * %d -- 时间
+         * %f -- 文件名
+         * %l -- 行号
+         * */
+        static std::map<std::string, std::function<FormatItem::ptr(const std::string &str)>> s_format_items = {
 #define XX(str, C) \
-            {#str, [](const std::string &fmt) { return FormatItem::ptr(new ServerDemo::C(fmt));}},
+            {#str, [](const std::string &fmt) { return FormatItem::ptr(new C(fmt));}},
 
-            XX("m", MessageFormatItem)
-            XX("p", LevelFormatItem)
-            XX("r", ElapseFormatItem)
-            XX("c", NameFormatItem)
-            XX("t", ThreadIdFormatItem)
-            XX("n", NewLineFormatItem)
-            XX("d", DateTimeFormatItem)
-            XX("f", FileNameFormatItem)
-            XX("l", LineFormatItem)
-
+                XX(m, MessageFormatItem)     //m:消息
+                XX(p, LevelFormatItem)       //p:日志级别
+                XX(r, ElapseFormatItem)      //r:累计毫秒数
+                XX(c, NameFormatItem)        //c:日志名称
+                XX(t, ThreadIdFormatItem)    //t:线程id
+                XX(n, NewLineFormatItem)     //n:换行
+                XX(d, DateTimeFormatItem)    //d:时间
+                XX(f, FileNameFormatItem)    //f:文件名
+                XX(l, LineFormatItem)        //l:行号
+                XX(T, TabFormatItem)         //T:Tab
+                XX(F, FiberIdFormatItem)     //F:协程id
+                XX(N, ThreadNameFormatItem)  //N:线程名称
 #undef XX
-    };
+        };
 
-    for (auto &i: vec) {
-        if (std::get<2>(i) == 0) {
-            m_items.emplace_back(FormatItem::ptr(new StringFormatItem(std::get<0>(i))));
-        } else {
-            auto it = s_format_items.find(std::get<0>(i));
-            if (it == s_format_items.end()) {
-                m_items.emplace_back(FormatItem::ptr(new StringFormatItem("<<error_format %" + std::get<0>(i) + ">>")));
+        //string,format,type
+        for (auto &i: vec) {
+            if (std::get<2>(i) == 0) {
+                m_items.emplace_back(FormatItem::ptr(new StringFormatItem(std::get<0>(i))));
             } else {
-                m_items.emplace_back(it->second(std::get<1>(i)));
+                auto it = s_format_items.find(std::get<0>(i));
+                if (it == s_format_items.end()) {
+                    m_error = true;
+                    m_items.emplace_back(
+                            FormatItem::ptr(new StringFormatItem("<<error_format %" + std::get<0>(i) + ">>")));
+                } else {
+                    m_items.emplace_back(it->second(std::get<1>(i)));
+                }
+            }
+//            std::cout << "(" << std::get<0>(i) << ") - (" << std::get<1>(i) << ") - (" << std::get<2>(i) << ")"
+//                      << std::endl;
+        }
+    }
+
+    std::ostream &
+    LogFormatter::format(std::ostream &ofs, std::shared_ptr<Logger> logger, LogLevel::Level level,
+                         LogEvent::ptr event) {
+        return ofs;
+    }
+
+
+    Logger::Logger(std::string name) : m_name(std::move(name)), m_level(LogLevel::Level::DEBUG) {
+        m_formatter = std::make_shared<LogFormatter>("%d [%p] %f %m %n");
+    }
+
+    void Logger::log(LogLevel::Level level, const LogEvent::ptr &event) {
+        if (level >= m_level) {
+            for (const auto &it: m_appenderList) {
+                it->setLogFormatter(this->m_formatter);
+                it->log(Logger::ptr(nullptr), level, event);
             }
         }
-        std::cout << std::get<0>(i) << "-" << std::get<1>(i) << "-" << std::get<2>(i) << std::endl;
     }
-}
+
+    void Logger::info(const LogEvent::ptr &event) {
+        log(LogLevel::INFO, event);
+    }
+
+    void Logger::debug(const LogEvent::ptr &event) {
+        log(LogLevel::DEBUG, event);
+    }
+
+    void Logger::warn(const LogEvent::ptr &event) {
+        log(LogLevel::WARN, event);
+    }
+
+    void Logger::error(const LogEvent::ptr &event) {
+        log(LogLevel::ERROR, event);
+    }
+
+    void Logger::fatal(const LogEvent::ptr &event) {
+        log(LogLevel::FATAL, event);
+    }
 
 
-ServerDemo::Logger::Logger(std::string name):m_name(std::move(name)) {}
-
-void ServerDemo::Logger::log(ServerDemo::LogLevel::Level level, const ServerDemo::LogEvent::ptr &event) {
-    if (level >= m_level) {
-        for (const auto &it: m_appenderList) {
-            it->log(std::shared_ptr<Logger>(this), level, event);
+    void Logger::deleteAppender(const LogAppender::ptr &appender) {
+        for (auto it = m_appenderList.begin(); it != m_appenderList.end(); ++it) {
+            if (*it == appender) {
+                m_appenderList.erase(it);
+                break;
+            }
         }
     }
-}
 
-void ServerDemo::Logger::info(const ServerDemo::LogEvent::ptr &event) {
-    log(LogLevel::INFO, event);
-}
+    void Logger::setFormatter(LogFormatter::ptr val) {
 
-void ServerDemo::Logger::debug(const ServerDemo::LogEvent::ptr &event) {
-    log(LogLevel::DEBUG, event);
-}
+    }
 
-void ServerDemo::Logger::warn(const ServerDemo::LogEvent::ptr &event) {
-    log(LogLevel::WARN, event);
-}
+    void Logger::setFormatter(const std::string &val) {
 
-void ServerDemo::Logger::error(const ServerDemo::LogEvent::ptr &event) {
-    log(LogLevel::ERROR, event);
-}
+    }
 
-void ServerDemo::Logger::fatal(const ServerDemo::LogEvent::ptr &event) {
-    log(LogLevel::FATAL, event);
-}
+    LogFormatter::ptr Logger::getFormatter() {
+        return m_formatter;
+    }
 
-void ServerDemo::Logger::addAppender(const ServerDemo::LogAppender::ptr &appender) {
-    m_appenderList.push_back(appender);
-}
+    std::string Logger::toYamlString() {
+        return "";
+    }
 
-void ServerDemo::Logger::deleteAppender(const ServerDemo::LogAppender::ptr &appender) {
-    for (auto it = m_appenderList.begin(); it != m_appenderList.end(); ++it) {
-        if (*it == appender) {
-            m_appenderList.erase(it);
-            break;
+    void Logger::clearAppenders() {
+        m_appenderList.clear();
+    }
+
+    void Logger::addAppender(const LogAppender::ptr &appender) {
+        m_appenderList.push_back(appender);
+    }
+
+    FileLogAppender::FileLogAppender(std::string
+                                     file_name) : m_filename(std::move(file_name)) {}
+
+
+    std::string StdoutLogAppender::toYamlString() {
+        return std::string();
+    }
+
+    void
+    StdoutLogAppender::log(const std::shared_ptr<Logger> &logger, LogLevel::Level level, const LogEvent::ptr &event) {
+        if (level >= m_level) {
+            std::cout << m_formatter->format(logger, level, event);
         }
     }
-}
-
-ServerDemo::FileLogAppender::FileLogAppender(std::string
-                                             file_name) : m_filename(std::move(file_name)) {}
 
 
-void ServerDemo::StdoutLogAppender::log(const std::shared_ptr<Logger> &logger, ServerDemo::LogLevel::Level level,
-                                        const ServerDemo::LogEvent::ptr &event) {
-    if (level >= m_level) {
-        std::cout << m_formatter->format(logger, level, event);
+    void FileLogAppender::log(const std::shared_ptr<Logger> &logger, LogLevel::Level level,
+                              const LogEvent::ptr &event) {
+        if (level >= m_level) {
+            m_filestream << m_formatter->format(logger, level, event);
+        }
+    }
+
+    bool FileLogAppender::reopen() {
+        if (m_filestream) {
+            m_filestream.close();
+        }
+        m_filestream.open(m_filename);
+        return !!m_filestream;
+    }
+
+    std::string FileLogAppender::toYamlString() {
+        return std::string();
     }
 }
-
-
-void ServerDemo::FileLogAppender::log(const std::shared_ptr<Logger> &logger, ServerDemo::LogLevel::Level level,
-                                      const ServerDemo::LogEvent::ptr &event) {
-    if (level >= m_level) {
-        m_filestream << m_formatter->format(logger, level, event);
-    }
-}
-
-bool ServerDemo::FileLogAppender::ropen() {
-    if (m_filestream) {
-        m_filestream.close();
-    }
-    m_filestream.open(m_filename);
-    return !!m_filestream;
-}
-
 
