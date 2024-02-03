@@ -28,8 +28,25 @@ namespace Server {
         }
     }
 
+    std::string LogLevel::getLevelColor(LogLevel::Level level) {
+        switch (level) {
+            case LogLevel::DEBUG:
+                return BLUE;
+            case LogLevel::ERROR:
+                return RED;
+            case LogLevel::WARN:
+                return YELLOW;
+            case LogLevel::INFO:
+                return GREEN;
+            case LogLevel::UNKNOW:
+                return RED;
+            case LogLevel::FATAL:
+                return RED;
+        }
+    }
+
     LogEvent::LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char *file, uint32_t line,
-                       uint32_t elapse, uint32_t thread_id, uint32_t fiber_id, uint64_t time,
+                       uint32_t elapse, pthread_t thread_id, uint32_t fiber_id, uint64_t time,
                        std::string thread_name)
             : m_file(file), m_line(line), m_elapse(elapse), m_threadId(thread_id), m_fiberId(fiber_id), m_time(time),
               m_threadName(std::move(thread_name)), m_logger(std::move(logger)), m_level(level) {
@@ -51,6 +68,7 @@ namespace Server {
     std::string LogFormatter::format(const std::shared_ptr<Logger> &logger, LogLevel::Level level,
                                      const LogEvent::ptr &event) {
         std::stringstream ss;
+        ss << LogLevel::getLevelColor(level);
         for (auto &item: m_items) {
             item->format(logger, level, ss, event);
         }
@@ -286,6 +304,16 @@ namespace Server {
 
     std::string FileLogAppender::toYamlString() {
         return std::string();
+    }
+
+    LogEventWrap::LogEventWrap(LogEvent::ptr event) : m_event(std::move(event)) {}
+
+    std::stringstream &LogEventWrap::getSS() {
+        return m_event->getSS();
+    }
+
+    LogEventWrap::~LogEventWrap() {
+        m_event->getLogger()->log(m_event->getLevel(), m_event);
     }
 }
 

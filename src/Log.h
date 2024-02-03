@@ -2,8 +2,8 @@
 // Created by 陈子锐 on 2024/2/1.
 //
 
-#ifndef _Server_LOG_H
-#define _Server_LOG_H
+#ifndef Server_LOG_H
+#define Server_LOG_H
 
 #include <string>
 #include <cstdint>
@@ -16,6 +16,27 @@
 #include <map>
 #include <functional>
 #include <memory>
+#include <thread>
+#include "util.h"
+
+/**
+ * @brief 使用流式方式将日志级别level的日志写入到logger
+ */
+#define LOG_LEVEL(logger, level) \
+    if(logger->getLeveL() <= level) \
+        Server::LogEventWrap(Server::LogEvent::ptr(new Server::LogEvent(logger, level, \
+                        __FILE__, __LINE__, 0, Server::GetThreadId(),\
+                        Server::GetFiberId(), time(0), "threadName"))).getSS()
+
+#define LOGD(logger)  LOG_LEVEL(logger, Server::LogLevel::DEBUG)
+
+#define LOGI(logger)  LOG_LEVEL(logger, Server::LogLevel::INFO)
+
+#define LOGW(logger)  LOG_LEVEL(logger, Server::LogLevel::WARN)
+
+#define LOGE(logger)  LOG_LEVEL(logger, Server::LogLevel::ERROR)
+
+#define LOGF(logger) LOG_LEVEL(logger,Server::LogLevel::FATAL)
 
 namespace Server {
 
@@ -34,6 +55,8 @@ namespace Server {
         };
 
         static const char *ToString(LogLevel::Level level);
+
+        static std::string getLevelColor(LogLevel::Level level);
     };
 
     /** 日志事件*/
@@ -53,9 +76,17 @@ namespace Server {
          * @param[in] time 日志事件(秒)
          * @param[in] thread_name 线程名称
          */
-        LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char *file, uint32_t line,
+        LogEvent(std::shared_ptr<Logger> logger,
+                 LogLevel::Level level,
+                 const char *file,
+                 uint32_t line,
                  uint32_t elapse,
-                 uint32_t thread_id, uint32_t fiber_id, uint64_t time, std::string thread_name);
+                 pthread_t thread_id,
+                 uint32_t fiber_id,
+                 uint64_t time,
+                 std::string thread_name);
+
+        ~LogEvent() = default;
 
         /**
          * @brief 返回文件名
@@ -75,7 +106,7 @@ namespace Server {
         /**
          * @brief 返回线程ID
          */
-        uint32_t getThreadId() const { return m_threadId; }
+        pthread_t getThreadId() const { return m_threadId; }
 
         /**
          * @brief 返回协程ID
@@ -131,7 +162,7 @@ namespace Server {
         /// 程序启动开始到现在的毫秒数
         uint32_t m_elapse = 0;
         /// 线程 ID
-        uint32_t m_threadId = 0;
+        pthread_t m_threadId;
         /// 协程 ID
         uint16_t m_fiberId = 0;
         /// 时间戳
@@ -144,6 +175,18 @@ namespace Server {
         std::shared_ptr<Logger> m_logger;
         /// 日志等级
         LogLevel::Level m_level;
+    };
+
+    class LogEventWrap {
+    public:
+        explicit LogEventWrap(LogEvent::ptr event);
+
+        ~LogEventWrap();
+
+        std::stringstream &getSS();
+
+    private:
+        LogEvent::ptr m_event;
     };
 
     /** 日志格式基类*/
@@ -541,7 +584,7 @@ namespace Server {
 
         void
         format(std::shared_ptr<Logger> logger, LogLevel::Level level, std::ostream &os, LogEvent::ptr event) override {
-            os << m_string;
+            os << LogLevel::getLevelColor(level) << m_string;
         }
 
     private:
@@ -574,4 +617,4 @@ namespace Server {
 
 }
 
-#endif //_Server_LOG_H
+#endif //Server_LOG_H

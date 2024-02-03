@@ -17,16 +17,21 @@ int main() {
             Server::LogLevel::DEBUG,
             __FILE__,
             __LINE__,
-            0,
-            1,
+            Server::GetFiberId(),
+            Server::GetThreadId(),
             2,
             time(nullptr),
             "TestLog"));
 
-    event->getSS() << "Hello Crash";
+    /** 4、Log 输出的内容*/
+    event->getSS() << "XXXXXXX";
 
-    /** 4、log 打印*/
+    /** 5、log 打印*/
     logger->log(Server::LogLevel::DEBUG, event);
+
+    /** 6、宏打印 */
+    LOGD(logger) << "DDDDDD";
+    LOGE(logger) << "SSSSSS";
 
     return 0;
 }

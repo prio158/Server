@@ -7,9 +7,11 @@ SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../bin)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../lib)
 
 set(
-    LIB_SRC
-    ../src/Log.cpp
-    ../src/Log.h
+        LIB_SRC
+        ../src/Log.cpp
+        ../src/Log.h
+        ../src/util.cpp
+        ../src/util.h
 )
 
 include_directories(../src)
