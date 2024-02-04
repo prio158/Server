@@ -12,6 +12,7 @@ set(
         ../src/Log.h
         ../src/util.cpp
         ../src/util.h
+        ../src/Singleton.h
 )
 
 include_directories(../src)

@@ -18,6 +18,7 @@
 #include <memory>
 #include <thread>
 #include "util.h"
+#include "Singleton.h"
 
 /**
  * @brief 使用流式方式将日志级别level的日志写入到logger
@@ -298,7 +299,7 @@ namespace Server {
         /**
          * @brief 设置日志级别
          */
-        void setLevel(LogLevel::Level val) { m_level = val; }
+        void setLevel(LogLevel::Level level) { m_level = level; }
 
         /**
          * @brief 将日志输出目标的配置转成YAML String
@@ -312,10 +313,12 @@ namespace Server {
 
     /** 日志*/
     class Logger {
+        friend class LoggerManager;
+
     public:
         typedef std::shared_ptr<Logger> ptr;
 
-        explicit Logger(std::string name = "root");
+        explicit Logger(std::string name = "stdout");
 
         /**
          * @brief 写日志
@@ -584,7 +587,7 @@ namespace Server {
 
         void
         format(std::shared_ptr<Logger> logger, LogLevel::Level level, std::ostream &os, LogEvent::ptr event) override {
-            os << LogLevel::getLevelColor(level) << m_string;
+            os << m_string;
         }
 
     private:
@@ -613,6 +616,23 @@ namespace Server {
             os << event->getThreadName();
         }
     };
+
+    class LoggerManager {
+    public:
+        explicit LoggerManager();
+
+        Logger::ptr &getLogger(const std::string &name);
+
+        void init();
+
+    private:
+        std::map<std::string, Logger::ptr> m_loggers;
+        Logger::ptr m_root;
+    };
+
+    /// 日志器管理类单例模式
+    typedef Server::Singleton<LoggerManager> LoggerMgr;
+
 
 
 }

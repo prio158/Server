@@ -52,13 +52,9 @@ namespace Server {
               m_threadName(std::move(thread_name)), m_logger(std::move(logger)), m_level(level) {
     }
 
-    void LogEvent::format(const char *fmt, ...) {
+    void LogEvent::format(const char *fmt, ...) {}
 
-    }
-
-    void LogEvent::format(const char *fmt, va_list al) {
-
-    }
+    void LogEvent::format(const char *fmt, va_list al) {}
 
 
     LogFormatter::LogFormatter(std::string pattern) : m_pattern(std::move(pattern)) {
@@ -68,7 +64,7 @@ namespace Server {
     std::string LogFormatter::format(const std::shared_ptr<Logger> &logger, LogLevel::Level level,
                                      const LogEvent::ptr &event) {
         std::stringstream ss;
-        ss << LogLevel::getLevelColor(level);
+        //ss << LogLevel::getLevelColor(level);
         for (auto &item: m_items) {
             item->format(logger, level, ss, event);
         }
@@ -272,7 +268,9 @@ namespace Server {
     }
 
     FileLogAppender::FileLogAppender(std::string
-                                     file_name) : m_filename(std::move(file_name)) {}
+                                     file_name) : m_filename(std::move(file_name)) {
+        reopen();
+    }
 
 
     std::string StdoutLogAppender::toYamlString() {
@@ -282,7 +280,7 @@ namespace Server {
     void
     StdoutLogAppender::log(const std::shared_ptr<Logger> &logger, LogLevel::Level level, const LogEvent::ptr &event) {
         if (level >= m_level) {
-            std::cout << m_formatter->format(logger, level, event);
+            std::cout << LogLevel::getLevelColor(level) << m_formatter->format(logger, level, event);
         }
     }
 
@@ -303,7 +301,7 @@ namespace Server {
     }
 
     std::string FileLogAppender::toYamlString() {
-        return std::string();
+        return "";
     }
 
     LogEventWrap::LogEventWrap(LogEvent::ptr event) : m_event(std::move(event)) {}
@@ -315,5 +313,25 @@ namespace Server {
     LogEventWrap::~LogEventWrap() {
         m_event->getLogger()->log(m_event->getLevel(), m_event);
     }
+
+    LoggerManager::LoggerManager() {
+        m_root = std::make_shared<Logger>();
+        m_root->addAppender(LogAppender::ptr(new StdoutLogAppender));
+        m_loggers[m_root->getName()] = m_root;
+        init();
+    }
+
+    Logger::ptr& LoggerManager::getLogger(const std::string &name) {
+        auto it = m_loggers.find(name);
+        if (it != m_loggers.end()) {
+            return it->second;
+        }
+        Logger::ptr logger(new Logger(name));
+        logger->m_root = m_root;
+        m_loggers[name] = logger;
+        return logger;
+    }
+
+    void LoggerManager::init() {}
 }
 
