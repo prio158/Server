@@ -21,7 +21,9 @@ namespace Server {
 
         explicit ConfigVarBase(std::string name, std::string desc = "")
                 : m_name(std::move(name)),
-                  m_desc(std::move(desc)) {}
+                  m_desc(std::move(desc)) {
+            std::transform(m_name.begin(), m_name.end(), m_name.begin(), ::tolower);
+        }
 
         virtual ~ConfigVarBase() = default;
 
@@ -92,7 +94,7 @@ namespace Server {
                 return tmp;
             }
             /** 正向查找在原字符串中第一个与指定字符串（或字符）中的任一字符都不匹配的字符，返回它的位置。若查找失败，则返回npos。*/
-            if (name.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGIJKLMNOPQRSTUVWXYZ._012345678") !=
+            if (name.find_first_not_of("abcdefghijklmnopqrstuvwxyz._012345678") !=
                 std::string::npos) {
                 LOGE(LOG_ROOT()) << "Lookup name invalid:" << name;
                 throw std::invalid_argument(name);
@@ -111,6 +113,10 @@ namespace Server {
             }
             return std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
         }
+
+        static void LoadFromYaml(const YAML::Node &node);
+
+        static ConfigVarBase::ptr LookupBase(const std::string &name);
 
     private:
         static ConfigVarMap configVarMap;
