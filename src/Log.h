@@ -39,8 +39,16 @@
 
 #define LOGF(logger) LOG_LEVEL(logger,Server::LogLevel::FATAL)
 
-namespace Server {
+#define LOG_ROOT() Server::LoggerMgr::GetInstance()->getRoot()
 
+/**
+ * Logger (定义日志类别)
+ *   ｜
+ *  Formatter(日志输出格式)
+ *   ｜
+ *  Appender(日志输出的地方)
+ * */
+namespace Server {
     class Logger;
 
     /** 日志级别*/
@@ -623,6 +631,8 @@ namespace Server {
 
         Logger::ptr &getLogger(const std::string &name);
 
+        Logger::ptr getRoot() const { return m_root; };
+
         void init();
 
     private:
@@ -631,9 +641,7 @@ namespace Server {
     };
 
     /// 日志器管理类单例模式
-    typedef Server::Singleton<LoggerManager> LoggerMgr;
-
-
+    typedef Singleton<LoggerManager> LoggerMgr;
 
 }
 

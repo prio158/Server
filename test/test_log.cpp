@@ -35,8 +35,14 @@ int main() {
     LOGI(logger) << "FFFFFF";
 
     /** 7、单例模式测试*/
-    auto& logger2 = Server::LoggerMgr::GetInstance()->getLogger("stdout");
-    logger2->log(Server::LogLevel::ERROR,event);
+    auto &logger2 = Server::LoggerMgr::GetInstance()->getLogger("stdout");
+    logger2->log(Server::LogLevel::ERROR, event);
+
+    /** 8、用宏的方式使用单例的logger*/
+    auto root = LOG_ROOT();
+    LOGI(logger) << root->getName();
+
+
 
     return 0;
 }
