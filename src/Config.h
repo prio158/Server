@@ -10,6 +10,7 @@
 #include <boost/lexical_cast.hpp>
 #include <utility>
 #include <yaml-cpp/yaml.h>
+#include <vector>
 #include "Log.h"
 
 //Config ------->yaml
@@ -41,8 +42,61 @@ namespace Server {
 
     };
 
+    /**
+     * @brief F类型 ----> T类型
+     * */
+    template<class F, class T>
+    class LexicalCast {
+    public:
+        T operator()(const F &v) {
+            return boost::lexical_cast<T>(v);
+        }
+    };
 
+    /**
+     * @brief YAML Node String -----> Vector<T>
+     * */
     template<class T>
+    class LexicalCast<std::string, std::vector<T>> {
+    public:
+        std::vector<T> operator()(const std::string &v) {
+            YAML::Node node = YAML::Load(v);
+            typename std::vector<T> vec;
+            std::stringstream ss;
+            for (auto &&i: node) {
+                ss.str("");
+                ss << i;
+                vec.emplace_back( LexicalCast<std::string, T>()(ss.str()));
+            }
+            return vec;
+        }
+    };
+
+    /**
+     * @brief Vector<T>-----> YAML Node String
+     * */
+    template<class T>
+    class LexicalCast<std::vector<T>, std::string> {
+    public:
+        std::string operator()(const std::vector<T> &vec) {
+            YAML::Node node;
+            for (auto &&i: vec) {
+                node.push_back(YAML::Load(LexicalCast<T, std::string>()(i)));
+            }
+            std::stringstream ss;
+            ss << node;
+            return ss.str();
+        }
+    };
+
+
+    /**
+     * FromStr---> T operator() (const std::string)
+     * ToStr---> std::string operator()(const T&)
+     * */
+    template<class T,
+            class FromStr = LexicalCast<std::string, T>,
+            class ToStr = LexicalCast<T, std::string>>
     class ConfigVar : public ConfigVarBase {
     public:
         typedef std::shared_ptr<ConfigVar> ptr;
@@ -54,7 +108,7 @@ namespace Server {
 
         std::string toString() override {
             try {
-                return boost::lexical_cast<std::string>(m_val);
+                return ToStr()(m_val);
             } catch (std::exception &e) {
                 LOGE(LOG_ROOT()) << "ConfigVar::toString exception"
                                  << e.what() << "convert: " << typeid(m_val).name() << " to string";
@@ -64,7 +118,8 @@ namespace Server {
 
         bool fromString(const std::string &val) override {
             try {
-                m_val = boost::lexical_cast<T>(val);
+                //m_val = boost::lexical_cast<T>(val);
+                setValue(FromStr()(val));
             } catch (std::exception &e) {
                 LOGE(LOG_ROOT()) << "ConfigVar::fromString exception"
                                  << e.what() << "convert: " << typeid(m_val).name() << " to string";

@@ -4,7 +4,12 @@
 
 #include "Config.h"
 
-Server::ConfigVar<std::string>::ptr g_desc_config = Server::Config::Lookup<std::string>("logs", "", "");
+static Server::ConfigVar<int>::ptr g_int_config = Server::Config::Lookup<int>("system.port", (int) 8080, "port");
+static Server::ConfigVar<float>::ptr g_float_config = Server::Config::Lookup<float>("system.value", 10.0, "value");
+static Server::ConfigVar<std::vector<int>>::ptr g_vec_config = Server::Config::Lookup<std::vector<int>>(
+        "system.int_vec",
+        std::vector<int>{1, 2},
+        "vec");
 
 void printYaml(const YAML::Node &node, int level) {
     if (node.IsScalar()) {
@@ -25,21 +30,31 @@ void printYaml(const YAML::Node &node, int level) {
     }
 }
 
-void testYaml() {
-    YAML::Node root = YAML::LoadFile("/Users/chenzirui/CLionProjects/ServerDemo/bin/conf/log.yml");
-    printYaml(root, 0);
+/**YAML Node String 转换为 Int*/
+void testConfigInt() {
+    YAML::Node root = YAML::LoadFile("/Users/chenzirui/CLionProjects/ServerDemo/bin/conf/test.yml");
+    LOGI(LOG_ROOT()) << "before: " << g_int_config->getValue();
+    Server::Config::LoadFromYaml(root);
+    LOGI(LOG_ROOT()) << "after: " << g_int_config->getValue();
 }
 
-void testConfig() {
-    LOGI(LOG_ROOT()) << "before: " << g_desc_config->getValue();
-    YAML::Node root = YAML::LoadFile("/Users/chenzirui/CLionProjects/ServerDemo/bin/conf/log.yml");
+void testConfigFloat() {
+    YAML::Node root = YAML::LoadFile("/Users/chenzirui/CLionProjects/ServerDemo/bin/conf/test.yml");
+    LOGI(LOG_ROOT()) << "before: " << g_float_config->getValue();
     Server::Config::LoadFromYaml(root);
-    LOGI(LOG_ROOT()) << "after: " << std::endl << g_desc_config->getValue();
+    LOGI(LOG_ROOT()) << "after: " << g_float_config->getValue();
+}
+
+void testConfigVec() {
+    YAML::Node root = YAML::LoadFile("/Users/chenzirui/CLionProjects/ServerDemo/bin/conf/test.yml");
+    LOGI(LOG_ROOT()) << "before: " << g_vec_config->toString();
+    Server::Config::LoadFromYaml(root);
+    LOGI(LOG_ROOT()) << "after: " << g_vec_config->toString();
 }
 
 int main() {
-//    LOGI(LOG_ROOT()) << g_int_config->getValue();
-//    LOGI(LOG_ROOT()) << g_int_config->toString();
-//    testYaml();
-    testConfig();
+    //testConfigInt();
+    //testConfigFloat();
+    testConfigVec();
+
 }
