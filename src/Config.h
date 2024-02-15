@@ -41,6 +41,8 @@ namespace Server {
 
         virtual bool fromString(const std::string &val) = 0;
 
+        virtual std::string getTypeName() const = 0;
+
     protected:
         std::string m_name;
         std::string m_desc;
@@ -308,7 +310,6 @@ namespace Server {
 
         bool fromString(const std::string &val) override {
             try {
-                //m_val = boost::lexical_cast<T>(val);
                 setValue(FromStr()(val));
             } catch (std::exception &e) {
                 LOGE(LOG_ROOT()) << "ConfigVar::fromString exception"
@@ -319,6 +320,10 @@ namespace Server {
         T getValue() const { return m_val; }
 
         void setValue(T val) { m_val = val; }
+
+        std::string getTypeName() const override {
+            return typeid(T).name();
+        };
 
     private:
         T m_val;
@@ -334,10 +339,18 @@ namespace Server {
                 const std::string &name,
                 const T &default_value,
                 const std::string &desc = "") {
-            auto tmp = Lookup<T>(name);
-            if (tmp) {
-                LOGI(LOG_ROOT()) << "Lookup name =" << name << " exists";
-                return tmp;
+            auto it = configVarMap.find(name);
+            if (it != configVarMap.end()) {
+                auto tmp = std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
+                if (tmp) {
+                    LOGI(LOG_ROOT()) << "Lookup name = " << it->first << " exists";
+                    return tmp;
+                } else {
+                    LOGE(LOG_ROOT()) << "Lookup name =" << name << " exists,but type: " <<
+                                     typeid(T).name() << " not support" << ",real type = " << it->second->getTypeName()
+                                     << " " << it->second->toString();
+                    return nullptr;
+                }
             }
             /** 正向查找在原字符串中第一个与指定字符串（或字符）中的任一字符都不匹配的字符，返回它的位置。若查找失败，则返回npos。*/
             if (name.find_first_not_of("abcdefghijklmnopqrstuvwxyz._012345678") !=
@@ -345,7 +358,6 @@ namespace Server {
                 LOGE(LOG_ROOT()) << "Lookup name invalid:" << name;
                 throw std::invalid_argument(name);
             }
-
             typename ConfigVar<T>::ptr v(new ConfigVar<T>(name, default_value, desc));
             configVarMap[name] = v;
             return v;

@@ -6,7 +6,7 @@
 
 static YAML::Node root = YAML::LoadFile("/Users/chenzirui/CLionProjects/ServerDemo/bin/conf/test.yml");
 static Server::ConfigVar<int>::ptr g_int_config = Server::Config::Lookup<int>("system.port", (int) 8080, "port");
-static Server::ConfigVar<float>::ptr g_float_config = Server::Config::Lookup<float>("system.value", 10.0, "value");
+static Server::ConfigVar<float>::ptr g_float_config = Server::Config::Lookup<float>("system.value", 10.0f, "value");
 static Server::ConfigVar<std::vector<int>>::ptr g_vec_config = Server::Config::Lookup<std::vector<int>>(
         "system.int_vec",
         std::vector<int>{1, 2},
@@ -28,13 +28,77 @@ static Server::ConfigVar<std::unordered_map<std::string, int>>::ptr g_unordered_
         std::unordered_map<std::string, int>{std::make_pair("key1", 1)},
         "unordered_map");
 
+class Person {
+public:
+    std::string name{};
+    int age = 0;
+    bool sex = true;
+public:
+    explicit Person(const std::string &name, int age, bool sex) : name(name), age(age), sex(sex) {}
+
+    std::string toString() const {
+        std::stringstream ss;
+        ss << "[ Person name=" << name
+           << " age=" << age
+           << " sex=" << sex
+           << " ]";
+        return ss.str();
+    }
+};
+
+namespace Server {
+    template<>
+    class LexicalCast<Person, std::string> {
+    public:
+        std::string operator()(const Person &person) {
+            YAML::Node node;
+            node["name"] = person.name;
+            node["age"] = person.age;
+            node["sex"] = person.sex;
+            std::stringstream ss;
+            ss << node;
+            return ss.str();
+        }
+    };
+
+    template<>
+    class LexicalCast<std::string, Person> {
+    public:
+        Person operator()(const std::string &v) {
+            YAML::Node node = YAML::Load(v);
+            try {
+                Person p(
+                        node["name"].as<std::string>(),
+                        node["age"].as<int>(),
+                        node["sex"].as<bool>()
+                );
+                return p;
+            } catch (std::exception e) {
+                LOGE(LOG_ROOT()) << "LexicalCast Person fail,"
+                                 << "[Person name: " << node["name"]
+                                 << "  age: " << node["age"]
+                                 << "  sex: " << node["sex"] << "]";
+            }
+        }
+    };
+}
+
+static Server::ConfigVar<Person>::ptr g_person_config = Server::Config::Lookup<Person>(
+        "system.person",
+        Person("czr", 12, true),
+        "person");
+
+//static Server::ConfigVar<std::vector<Person>>::ptr g_vec_person_config = Server::Config::Lookup<std::vector<Person>>(
+//        "system.int_vec",
+//        std::vector<Person>{Person("xxx", 1, 1)},
+//        "vec");
+
 template<class T>
 void printMap(std::unordered_map<std::string, T> &map) {
     for (auto &&it: map) {
         LOGI(LOG_ROOT()) << it.first << ":" << it.second;
     }
 }
-
 
 void printYaml(const YAML::Node &node, int level) {
     if (node.IsScalar()) {
@@ -103,6 +167,15 @@ void testConfigUnorderedMap() {
     printMap(valueAfter);
 }
 
+void testConfigUserType() {
+    auto valueBefore = g_person_config->getValue();
+    LOGI(LOG_ROOT()) << valueBefore.toString();
+    LOGI(LOG_ROOT()) << "-------------------------------";
+    Server::Config::LoadFromYaml(root);
+    auto valueAfter = g_person_config->getValue();
+    LOGI(LOG_ROOT()) << valueAfter.toString();
+}
+
 
 int main() {
     //testConfigInt();
@@ -111,5 +184,6 @@ int main() {
     //testConfigList();
     //testConfigSet(); //排序+去重
     //testConfigUnorderedSet(); //去重
-    testConfigUnorderedMap();
+    //testConfigUnorderedMap();
+    testConfigUserType(); //自定义类型
 }
