@@ -16,6 +16,7 @@
 #include <map>
 #include <functional>
 #include <memory>
+#include <set>
 #include <thread>
 #include "util.h"
 #include "Singleton.h"
@@ -41,6 +42,9 @@
 
 #define LOG_ROOT() Server::LoggerMgr::GetInstance()->getRoot()
 
+/// 指定name找到日志，LOG_ROOT是name=root的日志
+#define LOG_NAME(name) Server::LoggerMgr::GetInstance()->getLogger(name)
+
 /**
  * Logger (定义日志类别)
  *   ｜
@@ -48,6 +52,7 @@
  *   ｜
  *  Appender(日志输出的地方)
  * */
+class ptr;
 namespace Server {
     class Logger;
 
@@ -64,6 +69,8 @@ namespace Server {
         };
 
         static const char *ToString(LogLevel::Level level);
+
+        static LogLevel::Level FromString(const std::string &str);
 
         static std::string getLevelColor(LogLevel::Level level);
     };
@@ -276,6 +283,8 @@ namespace Server {
      * @brief 日志输出目标
      */
     class LogAppender {
+        friend class Logger;
+
     public:
         typedef std::shared_ptr<LogAppender> ptr;
 
@@ -292,7 +301,14 @@ namespace Server {
         /**
          * @brief 更改日志格式器
          */
-        void setLogFormatter(LogFormatter::ptr formatter) { m_formatter = std::move(formatter); }
+        void setLogFormatter(LogFormatter::ptr formatter) {
+            m_formatter = std::move(formatter);
+            if (m_formatter) {
+                m_hasFormatter = true;
+            } else {
+                m_hasFormatter = false;
+            }
+        }
 
         /**
          * @brief 获取日志格式器
@@ -317,6 +333,8 @@ namespace Server {
     protected:
         LogLevel::Level m_level = LogLevel::DEBUG;
         LogFormatter::ptr m_formatter;
+        /// 是否有自己的日志格式器
+        bool m_hasFormatter = false;
     };
 
     /** 日志*/
@@ -429,6 +447,7 @@ namespace Server {
         LogFormatter::ptr m_formatter;
         /// 主日志器
         Logger::ptr m_root;
+
     };
 
 
@@ -629,11 +648,15 @@ namespace Server {
     public:
         explicit LoggerManager();
 
-        Logger::ptr &getLogger(const std::string &name);
+        Logger::ptr getLogger(const std::string &name);
 
         Logger::ptr getRoot() const { return m_root; };
 
-        void init();
+        /**
+         * @brief 将所有的日志器配置转成YAML String
+         */
+        std::string toYamlString();
+
 
     private:
         std::map<std::string, Logger::ptr> m_loggers;
@@ -643,6 +666,19 @@ namespace Server {
     /// 日志器管理类单例模式
     typedef Singleton<LoggerManager> LoggerMgr;
 
+    struct LogAppenderDefine {
+        int type = 0; //1 File, 2 Stdout
+        LogLevel::Level level = LogLevel::UNKNOW;
+        std::string formatter;
+        std::string file;
+
+        bool operator==(const LogAppenderDefine &oth) const {
+            return type == oth.type
+                   && level == oth.level
+                   && formatter == oth.formatter
+                   && file == oth.file;
+        }
+    };
 }
 
 #endif //Server_LOG_H

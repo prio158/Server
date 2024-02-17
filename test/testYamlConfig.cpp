@@ -4,6 +4,8 @@
 
 #include "Config.h"
 
+#include <memory>
+
 static YAML::Node root = YAML::LoadFile("/Users/chenzirui/CLionProjects/ServerDemo/bin/conf/test.yml");
 static Server::ConfigVar<int>::ptr g_int_config = Server::Config::Lookup<int>("system.port", (int) 8080, "port");
 static Server::ConfigVar<float>::ptr g_float_config = Server::Config::Lookup<float>("system.value", 10.0f, "value");
@@ -38,6 +40,10 @@ public:
 
     bool operator==(const Person &person) const {
         return person.sex == sex && person.age == age && person.name == name;
+    }
+
+    bool operator<(const Person &person) const {
+        return person.age <= age;
     }
 
     std::string toString() const {
@@ -92,10 +98,13 @@ static Server::ConfigVar<Person>::ptr g_person_config = Server::Config::Lookup<P
         Person("czr", 12, true),
         "person");
 
-//static Server::ConfigVar<std::vector<Person>>::ptr g_vec_person_config = Server::Config::Lookup<std::vector<Person>>(
-//        "system.int_vec",
-//        std::vector<Person>{Person("xxx", 1, 1)},
+//static Server::ConfigVar<std::set<Person>>::ptr g_vec_person_config = Server::Config::Lookup<std::set<Person>>(
+//        "",
+//        std::set<Person>(),
 //        "vec");
+
+static Server::ConfigVar<std::set<Server::LogDefine>>::ptr g_log_define_test =
+        Server::Config::Lookup("logs", std::set<Server::LogDefine>(), "logs config");
 
 template<class T>
 void printMap(std::unordered_map<std::string, T> &map) {
@@ -184,6 +193,95 @@ void testConfigUserType() {
     LOGI(LOG_ROOT()) << valueAfter.toString();
 }
 
+void testConfigLogDefine() {
+    LOGI(LOG_ROOT()) << "-------------------------------";
+    Server::Config::LoadFromYaml(root);
+    auto logDefineSet = g_log_define_test->getValue();
+    for (auto &it: logDefineSet) {
+        it.toString();
+    }
+}
+
+void testToYamlString() {
+    std::cout << Server::LoggerMgr::GetInstance()->toYamlString() << std::endl;
+    YAML::Node node = YAML::LoadFile("/Users/chenzirui/CLionProjects/ServerDemo/bin/conf/test.yml");
+    Server::Config::LoadFromYaml(node);
+    std::cout << "==============================" << std::endl;
+    std::cout << Server::LoggerMgr::GetInstance()->toYamlString() << std::endl;
+}
+
+struct LogIniter {
+    LogIniter() {
+        ///事件注册
+        g_log_define_test->addChangeCallback(12323,
+                                             [](
+                                                     std::set<Server::LogDefine> old_value,
+                                                     std::set<Server::LogDefine> new_value) {
+                                                 LOGI(LOG_ROOT()) << "on_logger_conf_changed";
+                                                 for (auto &i: new_value) {
+                                                     auto it = old_value.find(i);
+                                                     Server::Logger::ptr logger;
+                                                     if (it == old_value.end()) {
+                                                         //新增logger
+                                                         logger = LOG_NAME(i.name);
+                                                     } else {
+                                                         if (!(i == *it)) {
+                                                             //修改的logger
+                                                             logger = LOG_NAME(i.name);
+                                                         } else {
+                                                             continue;
+                                                         }
+                                                     }
+                                                     logger->setLevel(i.level);
+                                                     //std::cout << "** " << i.name << " level=" << i.level
+                                                     //<< "  " << logger << std::endl;
+                                                     if (!i.formatter.empty()) {
+                                                         logger->setFormatter(i.formatter);
+                                                     }
+
+                                                     logger->clearAppenders();
+                                                     for (auto &a: i.appenders) {
+                                                         Server::LogAppender::ptr ap;
+                                                         if (a.type == 1) {
+                                                             ap = std::make_shared<Server::FileLogAppender>(a.file);
+                                                         } else if (a.type == 2) {
+//                                                             if (!LoggerMgr::GetInstance()->has("d")) {
+                                                             ap = std::make_shared<Server::StdoutLogAppender>();
+//                                                             } else {
+//                                                             continue;
+//                                                             }
+                                                         }
+                                                         ap->setLevel(a.level);
+                                                         if (!a.formatter.empty()) {
+                                                             Server::LogFormatter::ptr fmt(
+                                                                     new Server::LogFormatter(a.formatter));
+                                                             if (!fmt->isError()) {
+                                                                 ap->setLogFormatter(fmt);
+                                                             } else {
+                                                                 std::cout << "log.name=" << i.name << " appender type="
+                                                                           << a.type
+                                                                           << " formatter=" << a.formatter
+                                                                           << " is invalid" << std::endl;
+                                                             }
+                                                         }
+                                                         logger->addAppender(ap);
+                                                     }
+                                                 }
+
+                                                 for (auto &i: old_value) {
+                                                     auto it = new_value.find(i);
+                                                     if (it == new_value.end()) {
+                                                         //删除logger
+                                                         auto logger = LOG_NAME(i.name);
+                                                         logger->setLevel((Server::LogLevel::Level) 0);
+                                                         logger->clearAppenders();
+                                                     }
+                                                 }
+                                             });
+    }
+};
+
+static LogIniter __log_init__;
 
 int main() {
     //testConfigInt();
@@ -193,5 +291,7 @@ int main() {
     //testConfigSet(); //排序+去重
     //testConfigUnorderedSet(); //去重
     //testConfigUnorderedMap();
-    testConfigUserType(); //自定义类型
+    //testConfigUserType(); //自定义类型
+    //testConfigLogDefine();
+    testToYamlString();
 }

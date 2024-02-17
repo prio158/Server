@@ -3,6 +3,7 @@
 //
 
 #include "Log.h"
+#include "Config.h"
 
 #include <memory>
 #include <utility>
@@ -27,6 +28,27 @@ namespace Server {
                 return "UNKOWN";
         }
     }
+
+    LogLevel::Level LogLevel::FromString(const std::string &str) {
+#define XX(level, v) \
+    if(str == #v) { \
+        return LogLevel::level; \
+    }
+        XX(DEBUG, debug);
+        XX(INFO, info);
+        XX(WARN, warn);
+        XX(ERROR, error);
+        XX(FATAL, fatal);
+
+        XX(DEBUG, DEBUG);
+        XX(INFO, INFO);
+        XX(WARN, WARN);
+        XX(ERROR, ERROR);
+        XX(FATAL, FATAL);
+        return LogLevel::UNKNOW;
+#undef XX
+    }
+
 
     std::string LogLevel::getLevelColor(LogLevel::Level level) {
         switch (level) {
@@ -206,9 +228,13 @@ namespace Server {
 
     void Logger::log(LogLevel::Level level, const LogEvent::ptr &event) {
         if (level >= m_level) {
-            for (const auto &it: m_appenderList) {
-                it->setLogFormatter(this->m_formatter);
-                it->log(Logger::ptr(nullptr), level, event);
+            if (!m_appenderList.empty()) {
+                for (const auto &it: m_appenderList) {
+                    it->setLogFormatter(this->m_formatter);
+                    it->log(Logger::ptr(nullptr), level, event);
+                }
+            } else if (m_root) {
+                m_root->log(level, event);
             }
         }
     }
@@ -244,11 +270,24 @@ namespace Server {
     }
 
     void Logger::setFormatter(LogFormatter::ptr val) {
-
+        m_formatter = val;
+        for (auto &i: m_appenderList) {
+            if (!i->m_hasFormatter) {
+                i->m_formatter = m_formatter;
+            }
+        }
     }
 
     void Logger::setFormatter(const std::string &val) {
-
+        std::cout << "---" << val << std::endl;
+        LogFormatter::ptr new_val(new LogFormatter(val));
+        if (new_val->isError()) {
+            std::cout << "Logger setFormatter name=" << m_name
+                      << " value=" << val << " invalid formatter"
+                      << std::endl;
+            return;
+        }
+        setFormatter(new_val);
     }
 
     LogFormatter::ptr Logger::getFormatter() {
@@ -256,7 +295,22 @@ namespace Server {
     }
 
     std::string Logger::toYamlString() {
-        return "";
+        //MutexType::Lock lock(m_mutex);
+        YAML::Node node;
+        node["name"] = m_name;
+        if (m_level != LogLevel::UNKNOW) {
+            node["level"] = LogLevel::ToString(m_level);
+        }
+        if (m_formatter) {
+            node["formatter"] = m_formatter->getPattern();
+        }
+
+        for (auto &i: m_appenderList) {
+            node["appenders"].push_back(YAML::Load(i->toYamlString()));
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
     }
 
     void Logger::clearAppenders() {
@@ -272,9 +326,19 @@ namespace Server {
         reopen();
     }
 
-
     std::string StdoutLogAppender::toYamlString() {
-        return std::string();
+        //MutexType::Lock lock(m_mutex);
+        YAML::Node node;
+        node["type"] = "StdoutLogAppender";
+        if (m_level != LogLevel::UNKNOW) {
+            node["level"] = LogLevel::ToString(m_level);
+        }
+        if (m_hasFormatter && m_formatter) {
+            node["formatter"] = m_formatter->getPattern();
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
     }
 
     void
@@ -301,7 +365,19 @@ namespace Server {
     }
 
     std::string FileLogAppender::toYamlString() {
-        return "";
+        //MutexType::Lock lock(m_mutex);
+        YAML::Node node;
+        node["type"] = "FileLogAppender";
+        node["file"] = m_filename;
+        if (m_level != LogLevel::UNKNOW) {
+            node["level"] = LogLevel::ToString(m_level);
+        }
+        if (m_hasFormatter && m_formatter) {
+            node["formatter"] = m_formatter->getPattern();
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
     }
 
     LogEventWrap::LogEventWrap(LogEvent::ptr event) : m_event(std::move(event)) {}
@@ -318,10 +394,9 @@ namespace Server {
         m_root = std::make_shared<Logger>();
         m_root->addAppender(LogAppender::ptr(new StdoutLogAppender));
         m_loggers[m_root->getName()] = m_root;
-        init();
     }
 
-    Logger::ptr& LoggerManager::getLogger(const std::string &name) {
+    Logger::ptr LoggerManager::getLogger(const std::string &name) {
         auto it = m_loggers.find(name);
         if (it != m_loggers.end()) {
             return it->second;
@@ -332,6 +407,15 @@ namespace Server {
         return logger;
     }
 
-    void LoggerManager::init() {}
+    std::string LoggerManager::toYamlString() {
+        //MutexType::Lock lock(m_mutex);
+        YAML::Node node;
+        for (auto &i: m_loggers) {
+            node.push_back(YAML::Load(i.second->toYamlString()));
+        }
+        std::stringstream ss;
+        ss << node;
+        return ss.str();
+    }
 }
 

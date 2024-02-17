@@ -3,7 +3,6 @@
 //
 
 #include "Config.h"
-#include <list>
 
 
 namespace Server {
@@ -33,6 +32,7 @@ namespace Server {
         for (auto& it: all_nodes) {
             std::string key = it.first;
             if (key.empty()) continue;
+            std::transform(key.begin(), key.end(), key.begin(), ::tolower);
             ConfigVarBase::ptr var = LookupBase(key);
             if (var) {
                 if (it.second.IsScalar()) {
