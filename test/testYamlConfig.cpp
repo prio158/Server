@@ -34,7 +34,11 @@ public:
     int age = 0;
     bool sex = true;
 public:
-    explicit Person(const std::string &name, int age, bool sex) : name(name), age(age), sex(sex) {}
+    explicit Person(std::string name, int age, bool sex) : name(std::move(name)), age(age), sex(sex) {}
+
+    bool operator==(const Person &person) const {
+        return person.sex == sex && person.age == age && person.name == name;
+    }
 
     std::string toString() const {
         std::stringstream ss;
@@ -168,6 +172,10 @@ void testConfigUnorderedMap() {
 }
 
 void testConfigUserType() {
+    g_person_config->addChangeCallback(100, [](const Person &oldVal, const Person &newVal) {
+        LOGI(LOG_ROOT()) << "oldValue:" << oldVal.toString();
+        LOGI(LOG_ROOT()) << "newValue:" << newVal.toString();
+    });
     auto valueBefore = g_person_config->getValue();
     LOGI(LOG_ROOT()) << valueBefore.toString();
     LOGI(LOG_ROOT()) << "-------------------------------";

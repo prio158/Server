@@ -15,6 +15,7 @@
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
+#include <functional>
 #include <list>
 #include "Log.h"
 
@@ -293,6 +294,8 @@ namespace Server {
     public:
         typedef std::shared_ptr<ConfigVar> ptr;
 
+        typedef std::function<void(const T &old_value, const T &new_value)> onChangeCallback;
+
         explicit ConfigVar(const std::string &name,
                            const T &default_val,
                            const std::string &desc = "")
@@ -319,14 +322,44 @@ namespace Server {
 
         T getValue() const { return m_val; }
 
-        void setValue(T val) { m_val = val; }
+        /**
+         * 如果配置文件发生变化了，代码能否马上感知到变化，并做出调整
+         * 配置变更事件：当一个配置项修改的时候，可以反向通知对应的代码
+         * onChangeCallback: 配置变更时回调
+         * */
+        void setValue(const T &val) {
+            if (val == m_val) return;
+            for (auto &callback: changeCallbackMap) {
+                callback.second(m_val, val);
+            }
+            m_val = val;
+        }
 
         std::string getTypeName() const override {
             return typeid(T).name();
         };
 
+        void addChangeCallback(uint64_t key, onChangeCallback on_change_callback) {
+            changeCallbackMap[key] = std::move(on_change_callback);
+        }
+
+        void deleteChangeCallback(uint64_t key) {
+            changeCallbackMap.erase(key);
+        }
+
+        onChangeCallback getChangeCallback(uint64_t key) {
+            auto it = changeCallbackMap.find(key);
+            return it == changeCallbackMap.end() ? nullptr : it->second;
+        }
+
+        void clearCallbackMap(){
+            changeCallbackMap.clear();
+        }
+
     private:
         T m_val;
+        ///回调Maps，uint64_t key要求唯一，可以用hash作为key
+        std::map<uint64_t, onChangeCallback> changeCallbackMap;
     };
 
 
