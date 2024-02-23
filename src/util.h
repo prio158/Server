@@ -30,7 +30,7 @@
 
 namespace Server {
     uint32_t GetFiberId() ;
-    pthread_t GetThreadId();
+    pid_t GetThreadId();
 }
 
 

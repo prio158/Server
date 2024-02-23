@@ -17,6 +17,9 @@ set(
         ../src/Singleton.h
         ../src/Config.cpp
         ../src/Config.h
+        ../src/Thread.cpp
+        ../src/Thread.h
+
 )
 
 include_directories(../src ${BOOST_PATH}/include)
@@ -33,12 +36,19 @@ link_directories(${BOOST_PATH}/lib ${YAML_LIB_PATH})
 #)
 
 #[[YAML配置系统测试]]
+#add_executable(想·
+#        TestConfigYAML
+#        ${LOG_LIB_SRC}
+#        ../test/testYamlConfig.cpp想·
+#)
+
+#[[Thread系统测试]]
 add_executable(
-        TestConfigYAML
+        TestThread
         ${LOG_LIB_SRC}
-        ../test/testYamlConfig.cpp
+        ../test/test_thread.cpp
 )
 
 #target_link_libraries(TestConfigYAML LogLib yaml-cpp)
-target_link_libraries(TestConfigYAML yaml-cpp)
+target_link_libraries(TestThread yaml-cpp)
 

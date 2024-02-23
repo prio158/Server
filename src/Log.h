@@ -97,7 +97,7 @@ namespace Server {
                  const char *file,
                  uint32_t line,
                  uint32_t elapse,
-                 pthread_t thread_id,
+                 pid_t thread_id,
                  uint32_t fiber_id,
                  uint64_t time,
                  std::string thread_name);
@@ -122,7 +122,7 @@ namespace Server {
         /**
          * @brief 返回线程ID
          */
-        pthread_t getThreadId() const { return m_threadId; }
+        pid_t getThreadId() const { return m_threadId; }
 
         /**
          * @brief 返回协程ID
@@ -178,7 +178,7 @@ namespace Server {
         /// 程序启动开始到现在的毫秒数
         uint32_t m_elapse = 0;
         /// 线程 ID
-        pthread_t m_threadId;
+        pid_t m_threadId;
         /// 协程 ID
         uint16_t m_fiberId = 0;
         /// 时间戳

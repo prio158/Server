@@ -68,7 +68,7 @@ namespace Server {
     }
 
     LogEvent::LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char *file, uint32_t line,
-                       uint32_t elapse, pthread_t thread_id, uint32_t fiber_id, uint64_t time,
+                       uint32_t elapse, pid_t thread_id, uint32_t fiber_id, uint64_t time,
                        std::string thread_name)
             : m_file(file), m_line(line), m_elapse(elapse), m_threadId(thread_id), m_fiberId(fiber_id), m_time(time),
               m_threadName(std::move(thread_name)), m_logger(std::move(logger)), m_level(level) {

@@ -3,6 +3,7 @@
 //
 
 #include "util.h"
+#include <pthread.h>
 
 namespace Server {
 
@@ -10,7 +11,9 @@ namespace Server {
         return 0;
     }
 
-    pthread_t GetThreadId() {
-        return pthread_self();
+    pid_t GetThreadId() {
+        uint64_t tid;
+        pthread_threadid_np(nullptr, &tid);
+        return tid;
     }
 }
