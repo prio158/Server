@@ -11,6 +11,7 @@ static int count = 0;
 
 static Server::RWMutex mutex;
 static Server::Mutex s_mutex;
+static Server::CASLock cas_mutex;
 
 void fun1() {
     LOGI(g_logger) << " thread_Name=" << Server::Thread::GetName()
@@ -20,10 +21,10 @@ void fun1() {
 
     for (int i = 0; i < 100000; ++i) {
         //Server::RWMutex::WriteLock lock(mutex);
-        Server::Mutex::Lock lock(s_mutex);
+        //Server::Mutex::Lock lock(s_mutex);
+        Server::CASLock::Lock lock(cas_mutex);
         count++;
     }
-
 }
 
 void fun2() {

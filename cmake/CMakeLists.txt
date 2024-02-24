@@ -19,7 +19,6 @@ set(
         ../src/Config.h
         ../src/Thread.cpp
         ../src/Thread.h
-
 )
 
 include_directories(../src ${BOOST_PATH}/include)
@@ -49,6 +48,5 @@ add_executable(
         ../test/test_thread.cpp
 )
 
-#target_link_libraries(TestConfigYAML LogLib yaml-cpp)
 target_link_libraries(TestThread yaml-cpp)
 
