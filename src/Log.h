@@ -20,6 +20,7 @@
 #include <thread>
 #include "util.h"
 #include "Singleton.h"
+#include "Thread.h"
 
 /**
  * @brief 使用流式方式将日志级别level的日志写入到logger
@@ -287,6 +288,7 @@ namespace Server {
 
     public:
         typedef std::shared_ptr<LogAppender> ptr;
+        typedef Mutex MutexType;
 
         virtual ~LogAppender() = default;
 
@@ -302,6 +304,7 @@ namespace Server {
          * @brief 更改日志格式器
          */
         void setLogFormatter(LogFormatter::ptr formatter) {
+            MutexType::Lock lock(m_mutex);
             m_formatter = std::move(formatter);
             if (m_formatter) {
                 m_hasFormatter = true;
@@ -313,7 +316,10 @@ namespace Server {
         /**
          * @brief 获取日志格式器
          */
-        LogFormatter::ptr getLogFormatter() const { return m_formatter; }
+        LogFormatter::ptr getLogFormatter() {
+            MutexType::Lock lock(m_mutex);
+            return m_formatter;
+        }
 
         /**
          * @brief 获取日志级别
@@ -335,6 +341,7 @@ namespace Server {
         LogFormatter::ptr m_formatter;
         /// 是否有自己的日志格式器
         bool m_hasFormatter = false;
+        MutexType m_mutex;
     };
 
     /** 日志*/
@@ -343,6 +350,7 @@ namespace Server {
 
     public:
         typedef std::shared_ptr<Logger> ptr;
+        typedef Mutex MutexType;
 
         explicit Logger(std::string name = "stdout");
 
@@ -447,6 +455,8 @@ namespace Server {
         LogFormatter::ptr m_formatter;
         /// 主日志器
         Logger::ptr m_root;
+        /// 同步锁
+        MutexType m_mutex;
 
     };
 
@@ -646,6 +656,8 @@ namespace Server {
 
     class LoggerManager {
     public:
+        typedef Mutex MutexType;
+
         explicit LoggerManager();
 
         Logger::ptr getLogger(const std::string &name);
@@ -659,6 +671,7 @@ namespace Server {
 
 
     private:
+        MutexType m_mutex;
         std::map<std::string, Logger::ptr> m_loggers;
         Logger::ptr m_root;
     };

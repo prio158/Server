@@ -10,7 +10,6 @@
 #include <functional>
 #include <pthread.h>
 #include <semaphore.h>
-#include "Log.h"
 
 namespace Server {
 
@@ -74,6 +73,7 @@ namespace Server {
     class Mutex {
     public:
         typedef ScopedLockImpl<Mutex> Lock;
+
         explicit Mutex() {
             pthread_mutex_init(&m_lock, nullptr);
         }
@@ -93,6 +93,19 @@ namespace Server {
 
     private:
         pthread_mutex_t m_lock{};
+    };
+
+    class NullMutex {
+    public:
+        typedef ScopedLockImpl<NullMutex> Lock;
+
+        NullMutex() {}
+
+        ~NullMutex() {}
+
+        void lock();
+
+        void unlock();
     };
 
     template<class T>
@@ -187,6 +200,28 @@ namespace Server {
         pthread_rwlock_t m_lock;
     };
 
+    class NullRWMutex {
+    public:
+        typedef ReadScopedLockImpl<NullRWMutex> ReadLock;
+        typedef WriteScopedLockImpl<NullRWMutex> WriteLock;
+
+        NullRWMutex() {}
+
+        ~NullRWMutex() {}
+
+        void rdlock() {
+            //pthread_rwlock_rdlock(&m_lock);
+        }
+
+        void wrlock() {
+            //pthread_rwlock_wrlock(&m_lock);
+        }
+
+        void unlock() {
+            //pthread_rwlock_unlock(&m_lock);
+        }
+    };
+
     class Thread {
     public:
         typedef std::shared_ptr<Thread> ptr;
@@ -211,7 +246,7 @@ namespace Server {
 
     private:
         pid_t m_id = -1;
-        pthread_t m_thread = 0;
+        pthread_t m_thread = nullptr;
         std::function<void()> m_cb;
         std::string m_name;
         Semaphore m_semaphore;
@@ -223,6 +258,8 @@ namespace Server {
 
         Thread operator=(const Thread &) = delete;
     };
+
+
 }
 
 
