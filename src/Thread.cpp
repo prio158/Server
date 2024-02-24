@@ -6,6 +6,7 @@
 #include "Log.h"
 #include "util.h"
 
+
 static Server::Logger::ptr g_logger = LOG_NAME("system");
 
 
@@ -29,12 +30,12 @@ namespace Server {
         }
         m_cb = cb;
         m_name = name;
-
         int rt = pthread_create(&m_thread, nullptr, run, this);
         if (rt < 0) {
             LOGE(g_logger) << "pthread_create thread fail,rt=" << rt << " name=" << name;
             throw std::logic_error("pthread_create error");
         }
+        m_semaphore.wait(); //阻塞等待，直到线程运行起来，解除阻塞
     }
 
     Server::Thread::~Thread() {
@@ -68,9 +69,34 @@ namespace Server {
         pthread_setname_np(thread->m_name.substr(0, 15).c_str());
         std::function<void()> cb;
         cb.swap(thread->m_cb);
+        thread->m_semaphore.notify(); //线程运行起来了，发出通知
         cb();
         return nullptr;
     }
 
 
+    Semaphore::Semaphore(uint32_t count) {
+        m_semaphore = sem_open("/mysem", O_CREAT, S_IRUSR | S_IWUSR, count);
+        if (!m_semaphore) {
+            throw std::logic_error("sem_init error");
+        }
+    }
+
+    Semaphore::~Semaphore() {
+        sem_close(m_semaphore);
+    }
+
+    void Semaphore::wait() {
+        //sem_wait，会将m_semaphore--，当m_semaphore为 0 时，就会等待
+        if (sem_wait(m_semaphore) < 0) {
+            throw std::logic_error("sem wait error");
+        }
+    }
+
+    void Semaphore::notify() {
+        //sem_post 会将m_semaphore++
+        if (sem_post(m_semaphore) < 0) {
+            throw std::logic_error("sem post error");
+        }
+    }
 }
