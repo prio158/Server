@@ -323,6 +323,7 @@ namespace Server {
                 LOGE(LOG_ROOT()) << "ConfigVar::fromString exception"
                                  << e.what() << "convert: " << typeid(m_val).name() << " to string";
             }
+            return true;
         }
 
         T getValue() {

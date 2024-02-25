@@ -3,6 +3,8 @@
 //
 #include "Log.h"
 
+
+
 static Server::Logger::ptr g_logger = LOG_ROOT();
 
 void test_assert() {

@@ -51,7 +51,7 @@ namespace Server {
                 LOGE(g_logger) << "pthread_join thread fail,rt=" << rt << " name=" << m_name;
                 throw std::logic_error("pthread_join error");
             }
-            m_thread = nullptr;
+            m_thread = 0;
         }
     }
 
@@ -66,7 +66,7 @@ namespace Server {
         auto *thread = (Thread *) args;
         t_thread = thread;
         thread->m_id = GetThreadId();
-        pthread_setname_np(thread->m_name.substr(0, 15).c_str());
+        pthread_setname_np(t_thread->m_thread,thread->m_name.substr(0, 15).c_str());
         std::function<void()> cb;
         cb.swap(thread->m_cb);
         thread->m_semaphore.notify(); //线程运行起来了，发出通知
@@ -76,8 +76,7 @@ namespace Server {
 
 
     Semaphore::Semaphore(uint32_t count) {
-        m_semaphore = sem_open("/mysem", O_CREAT, S_IRUSR | S_IWUSR, count);
-        if (!m_semaphore) {
+        if (sem_init(m_semaphore,0,count)) {
             throw std::logic_error("sem_init error");
         }
     }

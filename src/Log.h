@@ -19,6 +19,7 @@
 #include <set>
 #include <thread>
 #include "Util.h"
+#include <assert.h>
 #include "Singleton.h"
 #include "Thread.h"
 
@@ -45,6 +46,26 @@
 
 /// 指定name找到日志，LOG_ROOT是name=root的日志
 #define LOG_NAME(name) Server::LoggerMgr::GetInstance()->getLogger(name)
+
+
+#define SERVER_ASSERT(x) \
+    if(!(x)) { \
+        LOGE(LOG_ROOT()) << "\nASSERTION:" << #x \
+            << "\nbacktrace:\n" \
+            << Server::BacktraceToString(100, "    ");\
+        assert(x);\
+    }
+
+#define SERVER_ASSERT2(x,w)\
+    if(!(x)) { \
+            LOGE(LOG_ROOT()) << "\nASSERTION:" << #x \
+                << "\nw:" << w           \
+                << "\nbacktrace:\n" \
+                << Server::BacktraceToString(100, "    ");\
+            assert(x);\
+        }
+
+
 
 /**
  * Logger (定义日志类别)

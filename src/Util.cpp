@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <execinfo.h>
 #include "Log.h"
+ #include <sys/syscall.h>
 
 namespace Server {
 
@@ -16,9 +17,7 @@ namespace Server {
     }
 
     pid_t GetThreadId() {
-        uint64_t tid;
-        pthread_threadid_np(nullptr, &tid);
-        return tid;
+        return syscall(SYS_gettid);
     }
 
     void Backtrace(std::vector<std::string> &bt, int size, int skip) {

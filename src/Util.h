@@ -9,6 +9,7 @@
 #include <thread>
 #include<pthread.h>
 #include<unistd.h>
+#include <vector>
 
 #define RESET "\033[0m"
 #define BLACK "\033[30m"              /* Black */
@@ -27,23 +28,6 @@
 #define BOLDMAGENTA "\033[1m\033[35m" /* Bold Magenta */
 #define BOLDCYAN "\033[1m\033[36m"    /* Bold Cyan */
 #define BOLDWHITE "\033[1m\033[37m"   /* Bold White */
-
-#define SERVER_ASSERT(x) \
-    if(!(x)) { \
-        LOGE(LOG_ROOT()) << "\nASSERTION:" << #x \
-            << "\nbacktrace:\n" \
-            << Server::BacktraceToString(100, "    ");\
-        assert(x);\
-    }
-
-#define SERVER_ASSERT2(x,w)\
-    if(!(x)) { \
-            LOGE(LOG_ROOT()) << "\nASSERTION:" << #x \
-                << "\nw:" << w           \
-                << "\nbacktrace:\n" \
-                << Server::BacktraceToString(100, "    ");\
-            assert(x);\
-        }
 
 
 namespace Server {

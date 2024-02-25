@@ -65,6 +65,7 @@ namespace Server {
             case LogLevel::FATAL:
                 return RED;
         }
+        return RED;
     }
 
     LogEvent::LogEvent(std::shared_ptr<Logger> logger, LogLevel::Level level, const char *file, uint32_t line,

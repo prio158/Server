@@ -41,7 +41,9 @@ namespace Server {
     Fiber::Fiber() {
         m_state = EXEC;
         SetThis(this);
-        if(getcontext())
+//        if(getcontext()){
+//
+//        }
     }
 
     void Fiber::SetThis(Fiber *f) {

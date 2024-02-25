@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <atomic>
+#include <string>
 
 namespace Server {
 
@@ -36,7 +37,7 @@ namespace Server {
         Semaphore operator=(const Semaphore &) = delete;
 
     private:
-        sem_t *m_semaphore;
+        sem_t *m_semaphore{};
 
     };
 
@@ -302,7 +303,7 @@ namespace Server {
 
     private:
         pid_t m_id = -1;
-        pthread_t m_thread = nullptr;
+        pthread_t m_thread ;
         std::function<void()> m_cb;
         std::string m_name;
         Semaphore m_semaphore;

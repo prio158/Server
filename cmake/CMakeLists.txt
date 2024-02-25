@@ -3,13 +3,12 @@ project(Server)
 
 set(CMAKE_CXX_STANDARD 11)
 
+SET(USR_PATH /usr/local/)
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../bin)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../lib)
-SET(BOOST_PATH /opt/homebrew/Cellar/boost/1.84.0)
-SET(YAML_LIB_PATH ${PROJECT_SOURCE_DIR}/../lib/yaml-cpp)
 
 set(
-        LOG_LIB_SRC
+        LIB_SRC
         ../src/Log.cpp
         ../src/Log.h
         ../src/Util.cpp
@@ -23,9 +22,9 @@ set(
         ../src/Fiber.cpp
 )
 
-include_directories(../src ${BOOST_PATH}/include)
+include_directories(../src ${USR_PATH}/include)
 
-link_directories(${BOOST_PATH}/lib ${YAML_LIB_PATH})
+link_directories(${USR_PATH}/lib)
 
 #add_library(LogConfigLib SHARED ${LOG_LIB_SRC})
 
@@ -56,7 +55,7 @@ link_directories(${BOOST_PATH}/lib ${YAML_LIB_PATH})
 #[[工具系统测试]]
 add_executable(
         TestMacro
-        ${LOG_LIB_SRC}
+        ${LIB_SRC}
         ../test/test_util.cpp
 )
 target_link_libraries(TestMacro yaml-cpp)
