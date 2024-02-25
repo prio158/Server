@@ -7,8 +7,6 @@
 
 namespace Server {
 
-    Config::ConfigVarMap Config::configVarMap;
-
     static void ListAllMember(const std::string &prefix,
                               const YAML::Node &node,
                               std::list<std::pair<std::string, const YAML::Node>> &output) {
@@ -47,7 +45,16 @@ namespace Server {
     }
 
     ConfigVarBase::ptr Config::LookupBase(const std::string &name) {
-        auto it = configVarMap.find(name);
-        return it == configVarMap.end() ? nullptr : it->second;
+        RWMutexType::ReadLock lock(GetMutex());
+        auto it = GetData().find(name);
+        return it == GetData().end() ? nullptr : it->second;
+    }
+
+    void Config::Visit(const std::function<void(ConfigVarBase::ptr)>& cb) {
+        RWMutexType::ReadLock lock(GetMutex());
+        ConfigVarMap& map = GetData();
+        for(const auto& it:map){
+            cb(it.second);
+        }
     }
 }

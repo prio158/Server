@@ -181,7 +181,7 @@ void testConfigUnorderedMap() {
 }
 
 void testConfigUserType() {
-    g_person_config->addChangeCallback(100, [](const Person &oldVal, const Person &newVal) {
+    g_person_config->addChangeCallback([](const Person &oldVal, const Person &newVal) {
         LOGI(LOG_ROOT()) << "oldValue:" << oldVal.toString();
         LOGI(LOG_ROOT()) << "newValue:" << newVal.toString();
     });
@@ -213,71 +213,70 @@ void testToYamlString() {
 struct LogIniter {
     LogIniter() {
         ///事件注册
-        g_log_define_test->addChangeCallback(12323,
-                                             [](
-                                                     std::set<Server::LogDefine> old_value,
-                                                     std::set<Server::LogDefine> new_value) {
-                                                 LOGI(LOG_ROOT()) << "on_logger_conf_changed";
-                                                 for (auto &i: new_value) {
-                                                     auto it = old_value.find(i);
-                                                     Server::Logger::ptr logger;
-                                                     if (it == old_value.end()) {
-                                                         //新增logger
-                                                         logger = LOG_NAME(i.name);
-                                                     } else {
-                                                         if (!(i == *it)) {
-                                                             //修改的logger
-                                                             logger = LOG_NAME(i.name);
-                                                         } else {
-                                                             continue;
-                                                         }
-                                                     }
-                                                     logger->setLevel(i.level);
-                                                     //std::cout << "** " << i.name << " level=" << i.level
-                                                     //<< "  " << logger << std::endl;
-                                                     if (!i.formatter.empty()) {
-                                                         logger->setFormatter(i.formatter);
-                                                     }
+        g_log_define_test->addChangeCallback([](
+                std::set<Server::LogDefine> old_value,
+                std::set<Server::LogDefine> new_value) {
+            LOGI(LOG_ROOT()) << "on_logger_conf_changed";
+            for (auto &i: new_value) {
+                auto it = old_value.find(i);
+                Server::Logger::ptr logger;
+                if (it == old_value.end()) {
+                    //新增logger
+                    logger = LOG_NAME(i.name);
+                } else {
+                    if (!(i == *it)) {
+                        //修改的logger
+                        logger = LOG_NAME(i.name);
+                    } else {
+                        continue;
+                    }
+                }
+                logger->setLevel(i.level);
+                //std::cout << "** " << i.name << " level=" << i.level
+                //<< "  " << logger << std::endl;
+                if (!i.formatter.empty()) {
+                    logger->setFormatter(i.formatter);
+                }
 
-                                                     logger->clearAppenders();
-                                                     for (auto &a: i.appenders) {
-                                                         Server::LogAppender::ptr ap;
-                                                         if (a.type == 1) {
-                                                             ap = std::make_shared<Server::FileLogAppender>(a.file);
-                                                         } else if (a.type == 2) {
+                logger->clearAppenders();
+                for (auto &a: i.appenders) {
+                    Server::LogAppender::ptr ap;
+                    if (a.type == 1) {
+                        ap = std::make_shared<Server::FileLogAppender>(a.file);
+                    } else if (a.type == 2) {
 //                                                             if (!LoggerMgr::GetInstance()->has("d")) {
-                                                             ap = std::make_shared<Server::StdoutLogAppender>();
+                        ap = std::make_shared<Server::StdoutLogAppender>();
 //                                                             } else {
 //                                                             continue;
 //                                                             }
-                                                         }
-                                                         ap->setLevel(a.level);
-                                                         if (!a.formatter.empty()) {
-                                                             Server::LogFormatter::ptr fmt(
-                                                                     new Server::LogFormatter(a.formatter));
-                                                             if (!fmt->isError()) {
-                                                                 ap->setLogFormatter(fmt);
-                                                             } else {
-                                                                 std::cout << "log.name=" << i.name << " appender type="
-                                                                           << a.type
-                                                                           << " formatter=" << a.formatter
-                                                                           << " is invalid" << std::endl;
-                                                             }
-                                                         }
-                                                         logger->addAppender(ap);
-                                                     }
-                                                 }
+                    }
+                    ap->setLevel(a.level);
+                    if (!a.formatter.empty()) {
+                        Server::LogFormatter::ptr fmt(
+                                new Server::LogFormatter(a.formatter));
+                        if (!fmt->isError()) {
+                            ap->setLogFormatter(fmt);
+                        } else {
+                            std::cout << "log.name=" << i.name << " appender type="
+                                      << a.type
+                                      << " formatter=" << a.formatter
+                                      << " is invalid" << std::endl;
+                        }
+                    }
+                    logger->addAppender(ap);
+                }
+            }
 
-                                                 for (auto &i: old_value) {
-                                                     auto it = new_value.find(i);
-                                                     if (it == new_value.end()) {
-                                                         //删除logger
-                                                         auto logger = LOG_NAME(i.name);
-                                                         logger->setLevel((Server::LogLevel::Level) 0);
-                                                         logger->clearAppenders();
-                                                     }
-                                                 }
-                                             });
+            for (auto &i: old_value) {
+                auto it = new_value.find(i);
+                if (it == new_value.end()) {
+                    //删除logger
+                    auto logger = LOG_NAME(i.name);
+                    logger->setLevel((Server::LogLevel::Level) 0);
+                    logger->clearAppenders();
+                }
+            }
+        });
     }
 };
 

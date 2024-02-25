@@ -18,6 +18,7 @@
 #include <functional>
 #include <list>
 #include "Log.h"
+#include "Thread.h"
 
 //Config ------->yaml
 namespace Server {
@@ -292,6 +293,8 @@ namespace Server {
             class ToStr = LexicalCast<T, std::string>>
     class ConfigVar : public ConfigVarBase {
     public:
+        typedef RWMutex RWMutexType;
+
         typedef std::shared_ptr<ConfigVar> ptr;
 
         typedef std::function<void(const T &old_value, const T &new_value)> onChangeCallback;
@@ -303,6 +306,7 @@ namespace Server {
 
         std::string toString() override {
             try {
+                RWMutexType::ReadLock lock(m_mutex);
                 return ToStr()(m_val);
             } catch (std::exception &e) {
                 LOGE(LOG_ROOT()) << "ConfigVar::toString exception"
@@ -313,6 +317,7 @@ namespace Server {
 
         bool fromString(const std::string &val) override {
             try {
+                RWMutexType::WriteLock lock(m_mutex);
                 setValue(FromStr()(val));
             } catch (std::exception &e) {
                 LOGE(LOG_ROOT()) << "ConfigVar::fromString exception"
@@ -320,7 +325,10 @@ namespace Server {
             }
         }
 
-        T getValue() const { return m_val; }
+        T getValue() {
+            RWMutexType::ReadLock lock(m_mutex);
+            return m_val;
+        }
 
         /**
          * 如果配置文件发生变化了，代码能否马上感知到变化，并做出调整
@@ -328,10 +336,16 @@ namespace Server {
          * onChangeCallback: 配置变更时回调
          * */
         void setValue(const T &val) {
-            if (val == m_val) return;
-            for (auto &callback: changeCallbackMap) {
-                callback.second(m_val, val);
+            //加上一个局部域，出局部域时，readLock析构
+            {
+                RWMutexType::ReadLock readLock(m_mutex);
+                if (val == m_val) return;
+                for (auto &callback: changeCallbackMap) {
+
+                    callback.second(m_val, val);
+                }
             }
+            RWMutexType::WriteLock writeLock(m_mutex);
             m_val = val;
         }
 
@@ -339,24 +353,32 @@ namespace Server {
             return typeid(T).name();
         };
 
-        void addChangeCallback(uint64_t key, onChangeCallback on_change_callback) {
-            changeCallbackMap[key] = std::move(on_change_callback);
+        uint64_t addChangeCallback(onChangeCallback on_change_callback) {
+            static uint64_t s_fun_id = 0;
+            RWMutexType::WriteLock lock(m_mutex);
+            ++s_fun_id;
+            changeCallbackMap[s_fun_id] = std::move(on_change_callback);
+            return s_fun_id;
         }
 
         void deleteChangeCallback(uint64_t key) {
+            RWMutexType::WriteLock lock(m_mutex);
             changeCallbackMap.erase(key);
         }
 
         onChangeCallback getChangeCallback(uint64_t key) {
+            RWMutexType::ReadLock lock(m_mutex);
             auto it = changeCallbackMap.find(key);
             return it == changeCallbackMap.end() ? nullptr : it->second;
         }
 
         void clearCallbackMap() {
+            RWMutexType::WriteLock lock(m_mutex);
             changeCallbackMap.clear();
         }
 
     private:
+        RWMutexType m_mutex;
         T m_val;
         ///回调Maps，uint64_t key要求唯一，可以用hash作为key
         std::map<uint64_t, onChangeCallback> changeCallbackMap;
@@ -366,15 +388,26 @@ namespace Server {
     class Config {
     public:
         typedef std::map<std::string, ConfigVarBase::ptr> ConfigVarMap;
+        typedef RWMutex RWMutexType; //读多写少，就用读写锁
 
-        /** 定义*/
+        /**
+         * @brief 获取/创建对应参数名的配置参数
+         * @param[in] name 配置参数名称
+         * @param[in] default_value 参数默认值
+         * @param[in] description 参数描述
+         * @details 获取参数名为name的配置参数,如果存在直接返回
+         *          如果不存在,创建参数配置并用default_value赋值
+         * @return 返回对应的配置参数,如果参数名存在但是类型不匹配则返回nullptr
+         * @exception 如果参数名包含非法字符[^0-9a-z_.] 抛出异常 std::invalid_argument
+         */
         template<class T>
         static typename ConfigVar<T>::ptr Lookup(
                 const std::string &name,
                 const T &default_value,
                 const std::string &desc = "") {
-            auto it = configVarMap.find(name);
-            if (it != configVarMap.end()) {
+            RWMutexType::WriteLock lock(GetMutex());
+            auto it = GetData().find(name);
+            if (it != GetData().end()) {
                 auto tmp = std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
                 if (tmp) {
                     LOGI(LOG_ROOT()) << "Lookup name = " << it->first << " exists";
@@ -393,26 +426,60 @@ namespace Server {
                 throw std::invalid_argument(name);
             }
             typename ConfigVar<T>::ptr v(new ConfigVar<T>(name, default_value, desc));
-            configVarMap[name] = v;
+            GetData()[name] = v;
             return v;
         }
 
-        /** 查找*/
+        /**
+         * @brief 查找配置参数
+         * @param[in] name 配置参数名称
+         * @return 返回配置参数名为name的配置参数
+         */
         template<class T>
         static typename ConfigVar<T>::ptr Lookup(const std::string &name) {
-            auto it = configVarMap.find(name);
-            if (it == configVarMap.end()) {
+            RWMutexType::ReadLock lock(GetMutex());
+            auto it = GetData().find(name);
+            if (it == GetData().end()) {
                 return nullptr;
             }
             return std::dynamic_pointer_cast<ConfigVar<T>>(it->second);
         }
 
+        /**
+         * @brief 使用YAML::Node初始化配置模块
+         */
         static void LoadFromYaml(const YAML::Node &node);
 
+        /**
+         * @brief 查找配置参数,返回配置参数的基类
+         * @param[in] name 配置参数名称
+         */
         static ConfigVarBase::ptr LookupBase(const std::string &name);
 
+        /**
+         * @brief 遍历配置模块里面所有配置项
+         * @param[in] cb 配置项回调函数
+         */
+        static void Visit(const std::function<void(ConfigVarBase::ptr)>& cb);
+
     private:
-        static ConfigVarMap configVarMap;
+        /** 这里用静态原因是保证：configVarMap和mutexType的初始化顺序
+         * 早于成员对象，也就是说保证在使用它们的时候，它们一定是初始化了的*/
+        /**
+        * @brief 返回所有的配置项
+        */
+        static ConfigVarMap &GetData() {
+            static ConfigVarMap configVarMap;
+            return configVarMap;
+        }
+
+        /**
+         * @brief 配置项的RWMutex
+         */
+        static RWMutexType &GetMutex(){
+            static RWMutexType mutexType;
+            return mutexType;
+        };
     };
 
     struct LogDefine {
@@ -423,7 +490,7 @@ namespace Server {
 
         void toString() const {
             std::string typeString;
-            for(auto& item:appenders){
+            for (auto &item: appenders) {
                 typeString += std::to_string(item.type);
                 typeString += " ";
             }
@@ -432,7 +499,7 @@ namespace Server {
                       " level=" << LogLevel::ToString(level) <<
                       " formatter=" << formatter <<
                       " appenders=" << "[ " << typeString << "]"
-                      " ]" <<std::endl;
+                                                             " ]" << std::endl;
         }
 
         bool operator==(const LogDefine &oth) const {

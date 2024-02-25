@@ -33,20 +33,21 @@ link_directories(${BOOST_PATH}/lib ${YAML_LIB_PATH})
 #        ${LOG_LIB_SRC}
 #        ../test/test_log.cpp
 #)
+#target_link_libraries(TestLog yaml-cpp)
 
 #[[YAML配置系统测试]]
-#add_executable(想·
-#        TestConfigYAML
-#        ${LOG_LIB_SRC}
-#        ../test/testYamlConfig.cpp想·
-#)
+add_executable(
+        TestConfigYAML
+        ${LOG_LIB_SRC}
+        ../test/testYamlConfig.cpp
+)
+target_link_libraries(TestConfigYAML yaml-cpp)
 
 #[[Thread系统测试]]
-add_executable(
-        TestThread
-        ${LOG_LIB_SRC}
-        ../test/test_thread.cpp
-)
-
-target_link_libraries(TestThread yaml-cpp)
+#add_executable(
+#        TestThread
+#        ${LOG_LIB_SRC}
+#        ../test/test_thread.cpp
+#)
+#target_link_libraries(TestThread yaml-cpp)
 
