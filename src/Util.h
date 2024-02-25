@@ -28,9 +28,34 @@
 #define BOLDCYAN "\033[1m\033[36m"    /* Bold Cyan */
 #define BOLDWHITE "\033[1m\033[37m"   /* Bold White */
 
+#define SERVER_ASSERT(x) \
+    if(!(x)) { \
+        LOGE(LOG_ROOT()) << "\nASSERTION:" << #x \
+            << "\nbacktrace:\n" \
+            << Server::BacktraceToString(100, "    ");\
+        assert(x);\
+    }
+
+#define SERVER_ASSERT2(x,w)\
+    if(!(x)) { \
+            LOGE(LOG_ROOT()) << "\nASSERTION:" << #x \
+                << "\nw:" << w           \
+                << "\nbacktrace:\n" \
+                << Server::BacktraceToString(100, "    ");\
+            assert(x);\
+        }
+
+
 namespace Server {
-    uint32_t GetFiberId() ;
+
+    uint32_t GetFiberId();
+
     pid_t GetThreadId();
+
+    /// 抛出栈信息
+    void Backtrace(std::vector<std::string> &bt, int size, int skip);
+
+    std::string BacktraceToString(int size, const std::string &prefix, int skip = 2);
 }
 
 

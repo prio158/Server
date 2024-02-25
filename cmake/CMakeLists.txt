@@ -12,13 +12,15 @@ set(
         LOG_LIB_SRC
         ../src/Log.cpp
         ../src/Log.h
-        ../src/util.cpp
-        ../src/util.h
+        ../src/Util.cpp
+        ../src/Util.h
         ../src/Singleton.h
         ../src/Config.cpp
         ../src/Config.h
         ../src/Thread.cpp
         ../src/Thread.h
+        ../src/Macro.cpp
+        ../src/Macro.h
 )
 
 include_directories(../src ${BOOST_PATH}/include)
@@ -36,12 +38,12 @@ link_directories(${BOOST_PATH}/lib ${YAML_LIB_PATH})
 #target_link_libraries(TestLog yaml-cpp)
 
 #[[YAML配置系统测试]]
-add_executable(
-        TestConfigYAML
-        ${LOG_LIB_SRC}
-        ../test/testYamlConfig.cpp
-)
-target_link_libraries(TestConfigYAML yaml-cpp)
+#add_executable(
+#        TestConfigYAML
+#        ${LOG_LIB_SRC}
+#        ../test/testYamlConfig.cpp
+#)
+#target_link_libraries(TestConfigYAML yaml-cpp)
 
 #[[Thread系统测试]]
 #add_executable(
@@ -51,3 +53,10 @@ target_link_libraries(TestConfigYAML yaml-cpp)
 #)
 #target_link_libraries(TestThread yaml-cpp)
 
+#[[协程系统测试]]
+add_executable(
+        TestMacro
+        ${LOG_LIB_SRC}
+        ../test/test_macro.cpp
+)
+target_link_libraries(TestMacro yaml-cpp)
