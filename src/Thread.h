@@ -255,7 +255,7 @@ namespace Server {
             m_mutex.clear();
         }
 
-        ~CASLock() {}
+        ~CASLock() = default;
 
         void lock() {
             /**
@@ -275,7 +275,7 @@ namespace Server {
         }
 
     private:
-        volatile std::atomic_flag m_mutex;
+        volatile std::atomic_flag m_mutex{};
     };
 
     class Thread {

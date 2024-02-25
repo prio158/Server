@@ -19,8 +19,8 @@ set(
         ../src/Config.h
         ../src/Thread.cpp
         ../src/Thread.h
-        ../src/Macro.cpp
-        ../src/Macro.h
+        ../src/Fiber.h
+        ../src/Fiber.cpp
 )
 
 include_directories(../src ${BOOST_PATH}/include)
@@ -53,10 +53,12 @@ link_directories(${BOOST_PATH}/lib ${YAML_LIB_PATH})
 #)
 #target_link_libraries(TestThread yaml-cpp)
 
-#[[协程系统测试]]
+#[[工具系统测试]]
 add_executable(
         TestMacro
         ${LOG_LIB_SRC}
-        ../test/test_macro.cpp
+        ../test/test_util.cpp
 )
 target_link_libraries(TestMacro yaml-cpp)
+
+
