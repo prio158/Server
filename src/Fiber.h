@@ -13,6 +13,10 @@
 
 namespace Server {
     /// 协程
+    /// Thread ---> main fiber <-----> sub fiber1
+    ///                  |----> sub fiber2
+    /// main fiber can switch any sub fiber,but any sub fiber can not switch other sub fiber
+    /// only switch main fiber
     class Fiber : public std::enable_shared_from_this<Fiber> {
         /**继承enable_shared_from_this，会提一个方法，可以获取当前类的智能指针
          * 同时Fiber不能在栈上创建对象了，
@@ -23,8 +27,8 @@ namespace Server {
         enum State {
             INIT,
             HOLD,
-            EXEC,
-            TERM,
+            EXEC, // running
+            TERM, // end
             READY
         };
 
@@ -39,10 +43,10 @@ namespace Server {
         ///重置协程函数，并重置状态为INIT
         void reset(std::function<void()> cb);
 
-        ///切换当前协程执行
+        ///切换当前协程执行, main fiber ----> sub fiber
         void swapIn();
 
-        ///切换当前协程到后台
+        ///切换当前协程到后台, sub fiber ----> main fiber
         void swapOut();
 
     public:
@@ -69,7 +73,7 @@ namespace Server {
         State m_state = INIT;
         ucontext_t m_ctx{};
         void *m_stack = nullptr;
-        std::function<void()> cb;
+        std::function<void()> m_cb;
     };
 }
 

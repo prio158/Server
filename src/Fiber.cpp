@@ -5,6 +5,7 @@
 #include "Fiber.h"
 #include "Config.h"
 #include <atomic>
+#include <utility>
 
 namespace Server {
 
@@ -34,24 +35,97 @@ namespace Server {
     using StackAllocator = MallocStackAllocator;
 
 
-    Fiber::Fiber(std::function<void()> cb, size_t stack_size) {
-
+    Fiber::Fiber(std::function<void()> cb, size_t stack_size) :
+            m_id(++s_fiber_id), m_cb(std::move(cb)) {
+        ++s_fiber_count;
+        m_stack_size = stack_size ? stack_size : g_fiber_stack_size->getValue();
+        m_stack = StackAllocator::Alloc(m_stack_size);
+        if (getcontext(&m_ctx)) {
+            SERVER_ASSERT2(false, "getcontext");
+        }
+        m_ctx.uc_link = nullptr;
+        m_ctx.uc_stack.ss_size = m_stack_size;
+        m_ctx.uc_stack.ss_sp = m_stack;
+        makecontext(&m_ctx, MainFunc, 0);
     }
 
     Fiber::Fiber() {
         m_state = EXEC;
         SetThis(this);
-//        if(getcontext()){
-//
-//        }
+        if (getcontext(&m_ctx)) {
+            SERVER_ASSERT2(false, "getcontext");
+        }
+        s_fiber_count++;
     }
 
     void Fiber::SetThis(Fiber *f) {
-
+        t_fiber = f;
     }
 
     Fiber::ptr Fiber::GetThis() {
-        return Server::Fiber::ptr();
+        if (t_fiber) {
+            return t_fiber->shared_from_this();
+        }
+        Fiber::ptr main_fiber(new Fiber);
+        SERVER_ASSERT(t_fiber == main_fiber.get());
+        t_thread_fiber = main_fiber;
+        return t_fiber->shared_from_this();
+    }
+
+    void Fiber::MainFunc() {
+
+    }
+
+    Fiber::~Fiber() {
+        --s_fiber_count;
+        if (m_stack) {
+            SERVER_ASSERT(m_state == TERM || m_state == INIT);
+            StackAllocator::Dealloc(m_stack, m_stack_size);
+        } else {
+            SERVER_ASSERT(!m_cb);
+            SERVER_ASSERT(m_state == EXEC);
+            Fiber *cur = t_fiber;
+            if (cur == this) {
+                SetThis(nullptr);
+            }
+        }
+    }
+
+    void Fiber::reset(std::function<void()> cb) {
+        ///  m_stack must be exist when reset
+        SERVER_ASSERT(m_stack);
+        /// m_state must be TERN or INIT when reset, m_state in running can not be reset.
+        SERVER_ASSERT(m_state == TERM || m_state == INIT);
+
+        m_cb = std::move(cb);
+        if (getcontext(&m_ctx)) {
+            SERVER_ASSERT2(false, "getcontext");
+        }
+        m_ctx.uc_link = nullptr;
+        m_ctx.uc_stack.ss_size = m_stack_size;
+        m_ctx.uc_stack.ss_sp = m_stack;
+        makecontext(&m_ctx, MainFunc, 0);
+        m_state = INIT;
+    }
+
+    void Fiber::swapIn() {
+        SetThis(this);
+        SERVER_ASSERT(m_state != EXEC);
+        m_state = EXEC;
+        /// old fiber context ----> new fiber context
+        if (swapcontext(&(t_thread_fiber->m_ctx), &(t_fiber->m_ctx))) {
+            SERVER_ASSERT2(false, "swapcontext");
+        }
+    }
+
+    void Fiber::swapOut() {
+        SetThis(t_thread_fiber.get());
+        SERVER_ASSERT(m_state != EXEC);
+        m_state = EXEC;
+        /// old fiber context ----> new fiber context
+        if (swapcontext(&m_ctx, &(t_thread_fiber->m_ctx))) {
+            SERVER_ASSERT2(false, "swapcontext");
+        }
     }
 
 }
