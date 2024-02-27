@@ -6,14 +6,15 @@
 #include <pthread.h>
 #include <execinfo.h>
 #include "Log.h"
- #include <sys/syscall.h>
+#include "Fiber.h"
+#include <sys/syscall.h>
 
 namespace Server {
 
     Logger::ptr g_logger = LOG_NAME("system");
 
     uint32_t GetFiberId() {
-        return 0;
+        return Fiber::GetFiberId();
     }
 
     pid_t GetThreadId() {

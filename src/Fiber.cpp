@@ -43,7 +43,8 @@ namespace Server {
         if (getcontext(&m_ctx)) {
             SERVER_ASSERT2(false, "getcontext");
         }
-        m_ctx.uc_link = nullptr;
+        SERVER_ASSERT(t_thread_fiber != nullptr)
+        m_ctx.uc_link = &(t_thread_fiber->m_ctx);
         m_ctx.uc_stack.ss_size = m_stack_size;
         m_ctx.uc_stack.ss_sp = m_stack;
         makecontext(&m_ctx, MainFunc, 0);
@@ -72,14 +73,12 @@ namespace Server {
         return t_fiber->shared_from_this();
     }
 
-    void Fiber::MainFunc() {
-
-    }
 
     Fiber::~Fiber() {
         --s_fiber_count;
+        LOGD(LOG_ROOT()) << "~Fiber,fiberId=" << m_id;
         if (m_stack) {
-            SERVER_ASSERT(m_state == TERM || m_state == INIT);
+            SERVER_ASSERT(m_state == TERM || m_state == INIT || m_state == EXCEPT);
             StackAllocator::Dealloc(m_stack, m_stack_size);
         } else {
             SERVER_ASSERT(!m_cb);
@@ -94,8 +93,8 @@ namespace Server {
     void Fiber::reset(std::function<void()> cb) {
         ///  m_stack must be exist when reset
         SERVER_ASSERT(m_stack);
-        /// m_state must be TERN or INIT when reset, m_state in running can not be reset.
-        SERVER_ASSERT(m_state == TERM || m_state == INIT);
+        /// m_state must be TERN or INIT or EXCEPT when reset, m_state in running can not be reset.
+        SERVER_ASSERT(m_state == TERM || m_state == INIT || m_state == EXCEPT);
 
         m_cb = std::move(cb);
         if (getcontext(&m_ctx)) {
@@ -120,12 +119,57 @@ namespace Server {
 
     void Fiber::swapOut() {
         SetThis(t_thread_fiber.get());
-        SERVER_ASSERT(m_state != EXEC);
-        m_state = EXEC;
         /// old fiber context ----> new fiber context
         if (swapcontext(&m_ctx, &(t_thread_fiber->m_ctx))) {
             SERVER_ASSERT2(false, "swapcontext");
         }
     }
+
+    void Fiber::YieldToReady() {
+        /// get current fiber
+        Fiber::ptr curFiber = GetThis();
+        curFiber->m_state = READY;
+        /// current fiber swap out to background
+        curFiber->swapOut();
+    }
+
+    void Fiber::YieldToHold() {
+        /// get current fiber
+        Fiber::ptr curFiber = GetThis();
+        curFiber->m_state = HOLD;
+        /// current fiber swap out to background
+        curFiber->swapOut();
+    }
+
+    uint64_t Fiber::TotalFibers() {
+        return s_fiber_count;
+    }
+
+    void Fiber::MainFunc() {
+        Fiber::ptr currentFiber = GetThis();
+        SERVER_ASSERT(currentFiber);
+        try {
+            currentFiber->m_cb();
+            currentFiber->m_cb = nullptr;
+            currentFiber->m_state = TERM;
+        } catch (std::exception &e) {
+            currentFiber->m_state = EXCEPT;
+            LOGE(LOG_ROOT()) << "Fiber Except" << e.what();
+        } catch (...) {
+            currentFiber->m_state = EXCEPT;
+            LOGE(LOG_ROOT()) << "Fiber Except";
+        }
+        auto raw_ptr = currentFiber.get();
+        ///release this currentFiber reference, decrease a reference
+        currentFiber.reset();
+        /// current fiber execute finish , return last fiber continue execute
+        raw_ptr->swapOut();
+    }
+
+    uint64_t Fiber::GetFiberId() {
+        if (t_fiber) return t_fiber->m_id;
+        return 0;
+    }
+
 
 }

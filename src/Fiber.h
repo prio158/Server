@@ -17,11 +17,16 @@ namespace Server {
     ///                  |----> sub fiber2
     /// main fiber can switch any sub fiber,but any sub fiber can not switch other sub fiber
     /// only switch main fiber
+    /// each thread have a main fiber created by Fiber::GetThis()
+    /// [Server::Fiber::ptr fiber(new Server::Fiber(run_in_fiber))] can create a sub fiber
+    /// sub_fiber->swapIn(); //switch sub_fiber execute, and suspend main fiber
+    /// sub fiber swapOut by [YieldToReady], switch main fiber continue execute from suspend point
     class Fiber : public std::enable_shared_from_this<Fiber> {
         /**继承enable_shared_from_this，会提一个方法，可以获取当前类的智能指针
          * 同时Fiber不能在栈上创建对象了，
          * */
     public:
+        ///shard_ptr: https://blog.csdn.net/hj605635529/article/details/76984839
         typedef std::shared_ptr<Fiber> ptr;
 
         enum State {
@@ -29,7 +34,8 @@ namespace Server {
             HOLD,
             EXEC, // running
             TERM, // end
-            READY
+            READY, // will running
+            EXCEPT // exception
         };
 
 
@@ -43,11 +49,12 @@ namespace Server {
         ///重置协程函数，并重置状态为INIT
         void reset(std::function<void()> cb);
 
-        ///切换当前协程执行, main fiber ----> sub fiber
+        ///切换当前协程执行(main fiber suspend), main fiber ----> sub fiber
         void swapIn();
 
-        ///切换当前协程到后台, sub fiber ----> main fiber
+        ///切换当前协程到后台(sub fiber suspend), sub fiber ----> main fiber
         void swapOut();
+
 
     public:
         ///设置当前协程
@@ -56,16 +63,20 @@ namespace Server {
         ///获取当前协程
         static Fiber::ptr GetThis();
 
-        /// 协程切换到后台，并设置为Ready状态
+        /// 协程切换到后台(suspend)，并设置为Ready状态
         static void YieldToReady();
 
-        /// 协程切换到后台，并设置为Hold状态
+        /// 协程切换到后台(suspend)，并设置为Hold状态
         static void YieldToHold();
 
         ///总协程数
         static uint64_t TotalFibers();
 
+        ///m_cb execute callback
         static void MainFunc();
+
+        ///get fiber id
+        static uint64_t GetFiberId();
 
     private:
         uint64_t m_id = 0;

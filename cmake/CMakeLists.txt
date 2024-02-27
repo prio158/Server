@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.27)
 project(Server)
 
-set(CMAKE_CXX_STANDARD 11)
+SET(CMAKE_CXX_STANDARD 11)
+add_definitions("-Wall -g")
 
 SET(USR_PATH /usr/local/)
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../bin)
@@ -53,11 +54,19 @@ link_directories(${USR_PATH}/lib)
 #target_link_libraries(TestThread yaml-cpp)
 
 #[[工具系统测试]]
+#add_executable(
+#        TestMacro
+#        ${LIB_SRC}
+#        ../test/test_util.cpp
+#)
+#target_link_libraries(TestMacro yaml-cpp)
+
+#[[Fiber系统测试]]
 add_executable(
-        TestMacro
+        TestFiberCrash
         ${LIB_SRC}
-        ../test/test_util.cpp
+        ../test/test_fiber.cpp
 )
-target_link_libraries(TestMacro yaml-cpp)
+target_link_libraries(TestFiberCrash yaml-cpp)
 
 
