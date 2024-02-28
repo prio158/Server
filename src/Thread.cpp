@@ -24,12 +24,11 @@ namespace Server {
 
     }
 
-    Server::Thread::Thread(const std::function<void()> &cb, const std::string &name) {
+    Server::Thread::Thread(const std::function<void()> &cb, const std::string &name)
+    : m_cb(cb), m_name(name) {
         if (name.empty()) {
-            m_name = "UNKNOW";
+            m_name = "UN_KNOW";
         }
-        m_cb = cb;
-        m_name = name;
         int rt = pthread_create(&m_thread, nullptr, run, this);
         if (rt < 0) {
             LOGE(g_logger) << "pthread_create thread fail,rt=" << rt << " name=" << name;
@@ -65,8 +64,9 @@ namespace Server {
     void *Thread::run(void *args) {
         auto *thread = (Thread *) args;
         t_thread = thread;
+        t_thread_name = thread->m_name;
         thread->m_id = GetThreadId();
-        pthread_setname_np(t_thread->m_thread,thread->m_name.substr(0, 15).c_str());
+        pthread_setname_np(t_thread->m_thread, thread->m_name.substr(0, 15).c_str());
         std::function<void()> cb;
         cb.swap(thread->m_cb);
         thread->m_semaphore.notify(); //线程运行起来了，发出通知
@@ -76,7 +76,7 @@ namespace Server {
 
 
     Semaphore::Semaphore(uint32_t count) {
-        if (sem_init(m_semaphore,0,count)) {
+        if (sem_init(m_semaphore, 0, count)) {
             throw std::logic_error("sem_init error");
         }
     }

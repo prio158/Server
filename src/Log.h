@@ -30,7 +30,7 @@
     if(logger->getLeveL() <= level) \
         Server::LogEventWrap(Server::LogEvent::ptr(new Server::LogEvent(logger, level, \
                         __FILE__, __LINE__, 0, Server::GetThreadId(),\
-                        Server::GetFiberId(), time(0), "threadName"))).getSS()
+                        Server::GetFiberId(), time(0), Server::Thread::GetName()))).getSS()
 
 #define LOGD(logger)  LOG_LEVEL(logger, Server::LogLevel::DEBUG)
 
@@ -598,11 +598,11 @@ namespace Server {
 
         void
         format(std::shared_ptr<Logger> logger, LogLevel::Level level, std::ostream &os, LogEvent::ptr event) override {
-            struct tm tm;
+            struct tm temp{};
             time_t time = event->getTime();
-            localtime_r(&time, &tm);
+            localtime_r(&time, &temp);
             char buf[64];
-            strftime(buf, sizeof(buf), m_format.c_str(), &tm);
+            strftime(buf, sizeof(buf), m_format.c_str(), &temp);
             os << buf;
         }
 

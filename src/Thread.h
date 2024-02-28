@@ -303,7 +303,7 @@ namespace Server {
 
     private:
         pid_t m_id = -1;
-        pthread_t m_thread ;
+        pthread_t m_thread{} ;
         std::function<void()> m_cb;
         std::string m_name;
         Semaphore m_semaphore;
