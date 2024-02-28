@@ -8,7 +8,7 @@ SET(USR_PATH /usr/local/)
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../bin)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../lib)
 
-set(
+SET(
         LIB_SRC
         ../src/Log.cpp
         ../src/Log.h
@@ -48,7 +48,7 @@ link_directories(${USR_PATH}/lib)
 #[[Thread系统测试]]
 #add_executable(
 #        TestThread
-#        ${LOG_LIB_SRC}
+#        ${LIB_SRC}
 #        ../test/test_thread.cpp
 #)
 #target_link_libraries(TestThread yaml-cpp)
@@ -63,10 +63,10 @@ link_directories(${USR_PATH}/lib)
 
 #[[Fiber系统测试]]
 add_executable(
-        TestFiberCrash
+        TestFiber
         ${LIB_SRC}
         ../test/test_fiber.cpp
 )
-target_link_libraries(TestFiberCrash yaml-cpp)
+target_link_libraries(TestFiber yaml-cpp)
 
 

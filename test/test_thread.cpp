@@ -33,10 +33,11 @@ void fun2() {
 
 
 int main() {
+    Server::Thread::SetName("main");
     LOGI(g_logger) << " thread test begin";
     std::vector<Server::Thread::ptr> thrs;
     for (int index = 0; index < 5; index++) {
-        Server::Thread::ptr thr(new Server::Thread(&fun1, "name_" + std::to_string(index)));
+        Server::Thread::ptr thr(new Server::Thread(&fun1, "sub_thread_" + std::to_string(index)));
         thrs.push_back(thr);
     }
 

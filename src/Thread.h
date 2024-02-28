@@ -37,7 +37,7 @@ namespace Server {
         Semaphore operator=(const Semaphore &) = delete;
 
     private:
-        sem_t *m_semaphore{};
+        sem_t m_semaphore;
 
     };
 

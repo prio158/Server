@@ -216,7 +216,8 @@ namespace Server {
 
 
     Logger::Logger(std::string name) : m_name(std::move(name)), m_level(LogLevel::Level::DEBUG) {
-        m_formatter = std::make_shared<LogFormatter>("[%d{%Y-%m-%d %H:%M:%S}][%N][%t][%F][%p][%f:%l]:%m%n");
+        //[%f:%l]
+        m_formatter = std::make_shared<LogFormatter>("[%d{%Y-%m-%d %H:%M:%S}][%N][%t][%F][%p]:%m%n");
     }
 
     void Logger::log(LogLevel::Level level, const LogEvent::ptr &event) {

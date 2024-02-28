@@ -19,7 +19,7 @@
 #include <set>
 #include <thread>
 #include "Util.h"
-#include <assert.h>
+#include <cassert>
 #include "Singleton.h"
 #include "Thread.h"
 
