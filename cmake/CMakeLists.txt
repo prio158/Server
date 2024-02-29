@@ -21,6 +21,10 @@ SET(
         ../src/Thread.h
         ../src/Fiber.h
         ../src/Fiber.cpp
+        ../src/Scheduler.cpp
+        ../src/Scheduler.h
+        ../src/Mutex.cpp
+        ../src/Mutex.h
 )
 
 include_directories(../src ${USR_PATH}/include)
