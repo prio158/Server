@@ -75,9 +75,9 @@ namespace Server {
             m_threadIds.emplace_back(m_threads[index]->getId());
         }
         lock.unlock();
-        if (m_scheduleFiber) {
-            m_scheduleFiber->call();
-        }
+//        if (m_scheduleFiber) {
+//            m_scheduleFiber->call();
+//        }
     }
 
 

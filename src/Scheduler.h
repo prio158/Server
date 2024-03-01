@@ -73,7 +73,6 @@ namespace Server {
             if (need_tickle) {
                 tickle();
             }
-
         }
 
         /**
@@ -162,8 +161,8 @@ namespace Server {
                 fiber.swap(*f);
             }
 
-            FiberAndThread(std::function<void()> *f, int thread) : threadId(thread) {
-                cb.swap(*f);
+            FiberAndThread(std::function<void()> f, int thread) : threadId(thread) {
+                cb.swap(f);
             }
 
             FiberAndThread() : threadId(-1) {}

@@ -3,10 +3,8 @@
 //
 
 #include "Log.h"
-#include "Config.h"
 #include "Scheduler.h"
-#include "Fiber.h"
-#include "Thread.h"
+
 
 void idleFiberScheduleTest() {
     Server::Scheduler::ptr scheduler(new Server::Scheduler());
@@ -14,8 +12,19 @@ void idleFiberScheduleTest() {
     scheduler->stop();
 }
 
+void testFiberTest() {
+    LOGI(LOG_ROOT()) << "testFiberTest running...";
+}
+
+void taskFiberSchedule() {
+    Server::Scheduler::ptr scheduler(new Server::Scheduler());
+    scheduler->start();
+    scheduler->schedule(&testFiberTest);
+    scheduler->stop();
+}
+
 int main() {
 
-    idleFiberScheduleTest();
-
+    //idleFiberScheduleTest();
+    taskFiberSchedule();
 }
