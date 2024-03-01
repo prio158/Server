@@ -52,7 +52,7 @@
     if(!(x)) { \
         LOGE(LOG_ROOT()) << "\nASSERTION:" << #x \
             << "\nbacktrace:\n" \
-            << Server::BacktraceToString(100, "    ");\
+            << Server::BacktraceToString();\
         assert(x);\
     }
 
@@ -61,7 +61,7 @@
             LOGE(LOG_ROOT()) << "\nASSERTION:" << #x \
                 << "\nw:" << w           \
                 << "\nbacktrace:\n" \
-                << Server::BacktraceToString(100, "    ");\
+                << Server::BacktraceToString();\
             assert(x);\
         }
 

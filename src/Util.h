@@ -39,7 +39,7 @@ namespace Server {
     /// 抛出栈信息
     void Backtrace(std::vector<std::string> &bt, int size, int skip);
 
-    std::string BacktraceToString(int size, const std::string &prefix, int skip = 2);
+    std::string BacktraceToString(int size = 64, std::string& prefix = (std::string &) "    ", int skip = 2);
 }
 
 

@@ -6,6 +6,7 @@
 #include "Config.h"
 #include <atomic>
 #include <utility>
+#include "Scheduler.h"
 
 namespace Server {
 
@@ -14,8 +15,8 @@ namespace Server {
     ///定义一个线程局部变量
     ///对象的存储在线程开始时分配，而在线程结束时自动释放。
     ///线程之间就不会因为访问同一全局对象而引起资源竞争导致性能下降
-    static thread_local Fiber *t_fiber = nullptr;
-    static thread_local Fiber::ptr t_thread_fiber = nullptr;
+    static thread_local Fiber *t_fiber = nullptr; //　临时　sub fiber
+    static thread_local Fiber::ptr t_thread_fiber = nullptr; //main_fiber
 
     static ConfigVar<uint32_t>::ptr g_fiber_stack_size =
             Config::Lookup<uint32_t>("fiber.stack_size", 1024 * 1024,
@@ -35,7 +36,7 @@ namespace Server {
     using StackAllocator = MallocStackAllocator;
 
 
-    Fiber::Fiber(std::function<void()> cb, size_t stack_size) :
+    Fiber::Fiber(std::function<void()> cb, size_t stack_size, bool use_caller) :
             m_id(++s_fiber_id), m_cb(std::move(cb)) {
         ++s_fiber_count;
         m_stack_size = stack_size ? stack_size : g_fiber_stack_size->getValue();
@@ -43,11 +44,16 @@ namespace Server {
         if (getcontext(&m_ctx)) {
             SERVER_ASSERT2(false, "getcontext");
         }
-        SERVER_ASSERT(t_thread_fiber != nullptr)
-        m_ctx.uc_link = &(t_thread_fiber->m_ctx);
+
+        m_ctx.uc_link = nullptr;
         m_ctx.uc_stack.ss_size = m_stack_size;
         m_ctx.uc_stack.ss_sp = m_stack;
-        makecontext(&m_ctx, MainFunc, 0);
+        if (!use_caller) {
+            /// 这里没有直接将cb作为this fiber执行的回调，而是静态设置为MainFunc，在MainFunc中再执行cb, Hook operation
+            makecontext(&m_ctx, MainFunc, 0);
+        } else {
+            makecontext(&m_ctx, MainFuncCaller, 0);
+        }
     }
 
     Fiber::Fiber() {
@@ -78,7 +84,7 @@ namespace Server {
         --s_fiber_count;
         LOGD(LOG_ROOT()) << "~Fiber,fiberId=" << m_id;
         if (m_stack) {
-            SERVER_ASSERT(m_state == TERM || m_state == INIT || m_state == EXCEPT);
+            SERVER_ASSERT(m_state == TERM || m_state == INIT || m_state == EXCEPT)
             StackAllocator::Dealloc(m_stack, m_stack_size);
         } else {
             SERVER_ASSERT(!m_cb);
@@ -103,25 +109,49 @@ namespace Server {
         m_ctx.uc_link = nullptr;
         m_ctx.uc_stack.ss_size = m_stack_size;
         m_ctx.uc_stack.ss_sp = m_stack;
+        /// 这里没有直接将cb作为this fiber执行的回调，而是静态设置为MainFunc，在MainFunc中再执行ｃｂ
         makecontext(&m_ctx, MainFunc, 0);
         m_state = INIT;
     }
 
     void Fiber::swapIn() {
         SetThis(this);
-        SERVER_ASSERT(m_state != EXEC);
+        SERVER_ASSERT(m_state != EXEC)
         m_state = EXEC;
         /// old fiber context ----> new fiber context
-        if (swapcontext(&(t_thread_fiber->m_ctx), &(t_fiber->m_ctx))) {
+        LOGD(LOG_ROOT()) << "Fiber::swapIn==>" << "[FiberId:" <<
+                         Scheduler::GetMainScheduleFiber()->m_id << "]" << "--->" << "[FiberId:" << m_id << "]";
+        if (swapcontext(&(Scheduler::GetMainScheduleFiber()->m_ctx), &m_ctx)) {
             SERVER_ASSERT2(false, "swapcontext");
         }
     }
 
     void Fiber::swapOut() {
-        SetThis(t_thread_fiber.get());
         /// old fiber context ----> new fiber context
-        if (swapcontext(&m_ctx, &(t_thread_fiber->m_ctx))) {
-            SERVER_ASSERT2(false, "swapcontext");
+        SetThis(Scheduler::GetMainScheduleFiber());
+        LOGD(LOG_ROOT()) << "Fiber::swapOut==>" << "[FiberId:" << m_id << "]" << "--->" << "[FiberId:"
+                         << Scheduler::GetMainScheduleFiber()->m_id << "]";
+        if (swapcontext(&m_ctx, &(Scheduler::GetMainScheduleFiber()->m_ctx))) {
+            SERVER_ASSERT2(false, "swap context")
+        }
+    }
+
+    void Fiber::call() {
+        SetThis(this);
+        m_state = EXEC;
+        LOGD(LOG_ROOT()) << "Fiber::call==>" << "[FiberId:" << t_thread_fiber->m_id << "]"
+                         << "--->" << "[FiberId:" << m_id << "]";
+        if (swapcontext(&t_thread_fiber->m_ctx, &m_ctx)) {
+            SERVER_ASSERT2(false, "swap context");
+        }
+    }
+
+    void Fiber::back() {
+        SetThis(t_thread_fiber.get());
+        LOGD(LOG_ROOT()) << "Fiber::back==>" << "[FiberId:" << m_id << "]" << "--->"
+                         << "[FiberId:" << t_thread_fiber->m_id << "]";
+        if (swapcontext(&m_ctx, &t_thread_fiber->m_ctx)) {
+            SERVER_ASSERT2(false, "swap context");
         }
     }
 
@@ -147,14 +177,15 @@ namespace Server {
 
     void Fiber::MainFunc() {
         Fiber::ptr currentFiber = GetThis();
-        SERVER_ASSERT(currentFiber);
+        SERVER_ASSERT(currentFiber)
+        LOGD(LOG_ROOT()) << "Id=" << currentFiber->m_id << " Fiber::MainFunc Execute";
         try {
             currentFiber->m_cb();
             currentFiber->m_cb = nullptr;
             currentFiber->m_state = TERM;
         } catch (std::exception &e) {
             currentFiber->m_state = EXCEPT;
-            LOGE(LOG_ROOT()) << "Fiber Except" << e.what();
+            LOGE(LOG_ROOT()) << "Fiber Except" << e.what() << std::endl << BacktraceToString();
         } catch (...) {
             currentFiber->m_state = EXCEPT;
             LOGE(LOG_ROOT()) << "Fiber Except";
@@ -163,7 +194,31 @@ namespace Server {
         ///release this currentFiber reference, decrease a reference
         currentFiber.reset();
         /// current fiber execute finish , return last fiber continue execute
+        LOGD(LOG_ROOT()) << "Fiber will swapOut From MainFunc";
         raw_ptr->swapOut();
+    }
+
+    void Fiber::MainFuncCaller() {
+        Fiber::ptr currentFiber = GetThis();
+        SERVER_ASSERT(currentFiber)
+        LOGD(LOG_ROOT()) << "Id=" << currentFiber->m_id << " Fiber::MainFuncCaller Execute";
+        try {
+            currentFiber->m_cb();
+            currentFiber->m_cb = nullptr;
+            currentFiber->m_state = TERM;
+        } catch (std::exception &e) {
+            currentFiber->m_state = EXCEPT;
+            LOGE(LOG_ROOT()) << "Fiber Except" << e.what() << std::endl << BacktraceToString();
+        } catch (...) {
+            currentFiber->m_state = EXCEPT;
+            LOGE(LOG_ROOT()) << "Fiber Except";
+        }
+        auto raw_ptr = currentFiber.get();
+        ///release this currentFiber reference, decrease a reference
+        currentFiber.reset();
+        /// current fiber execute finish , return last fiber continue execute
+        LOGD(LOG_ROOT()) << "Fiber will back From MainFuncCaller";
+        raw_ptr->back();
     }
 
     uint64_t Fiber::GetFiberId() {

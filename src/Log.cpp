@@ -217,7 +217,7 @@ namespace Server {
 
     Logger::Logger(std::string name) : m_name(std::move(name)), m_level(LogLevel::Level::DEBUG) {
         //[%f:%l]
-        m_formatter = std::make_shared<LogFormatter>("[%d{%Y-%m-%d %H:%M:%S}][%N][%t][%F][%p]:%m%n");
+        m_formatter = std::make_shared<LogFormatter>("[%d{%Y-%m-%d %H:%M:%S}][%N][%t][%F][%p][%f:%l]:%m%n");
     }
 
     void Logger::log(LogLevel::Level level, const LogEvent::ptr &event) {
@@ -406,6 +406,7 @@ namespace Server {
     LoggerManager::LoggerManager() {
         m_root = std::make_shared<Logger>();
         m_root->addAppender(LogAppender::ptr(new StdoutLogAppender));
+        m_root->addAppender(Server::LogAppender::ptr(new Server::FileLogAppender("./log.txt")));
         m_loggers[m_root->getName()] = m_root;
     }
 

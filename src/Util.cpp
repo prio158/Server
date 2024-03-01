@@ -37,7 +37,7 @@ namespace Server {
         free(array);
     }
 
-    std::string BacktraceToString(int size, const std::string &prefix, int skip) {
+    std::string BacktraceToString(int size, std::string &prefix, int skip) {
         std::vector<std::string> bt;
         Backtrace(bt, size, skip);
         std::stringstream ss;

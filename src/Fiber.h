@@ -11,7 +11,6 @@
 #include <functional>
 
 
-
 namespace Server {
     /// 协程
     /// Thread ---> main fiber <-----> sub fiber1
@@ -26,24 +25,34 @@ namespace Server {
         /**继承enable_shared_from_this，会提一个方法，可以获取当前类的智能指针
          * 同时Fiber不能在栈上创建对象了，
          * */
+        friend class Scheduler;
+
     public:
         ///shard_ptr: https://blog.csdn.net/hj605635529/article/details/76984839
         typedef std::shared_ptr<Fiber> ptr;
 
+        /**
+         * @brief 协程状态
+         */
         enum State {
+            /// 初始化状态
             INIT,
+            /// 暂停状态
             HOLD,
-            EXEC, // running
-            TERM, // end
-            READY, // will running
-            EXCEPT // exception
+            /// 执行中状态
+            EXEC,
+            /// 结束状态
+            TERM,
+            /// 可执行状态
+            READY,
+            /// 异常状态
+            EXCEPT
         };
-
 
     public:
         explicit Fiber();
 
-        explicit Fiber(std::function<void()> cb, size_t stack_size = 0);
+        explicit Fiber(std::function<void()> cb, size_t stack_size = 0,bool use_caller =false);
 
         ~Fiber();
 
@@ -55,6 +64,20 @@ namespace Server {
 
         ///切换当前协程到后台(sub fiber suspend), sub fiber ----> main fiber
         void swapOut();
+
+        /**
+        * @brief 将当前线程切换到执行状态
+        * @pre 执行的为当前线程的主协程
+        */
+        void call();
+
+        /**
+         * @biref 执行的为该协程
+         * @post 返回到线程的主协程
+         */
+        void back();
+
+        State getState() const { return m_state; }
 
 
     public:
@@ -70,11 +93,14 @@ namespace Server {
         /// 协程切换到后台(suspend)，并设置为Hold状态
         static void YieldToHold();
 
+
         ///总协程数
         static uint64_t TotalFibers();
 
-        ///m_cb execute callback
+        ///m_cb execute hook callback
         static void MainFunc();
+
+        static void MainFuncCaller();
 
         ///get fiber id
         static uint64_t GetFiberId();

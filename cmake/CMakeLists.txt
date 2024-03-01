@@ -66,11 +66,19 @@ link_directories(${USR_PATH}/lib)
 #target_link_libraries(TestMacro yaml-cpp)
 
 #[[Fiber系统测试]]
+#add_executable(
+#        TestFiber
+#        ${LIB_SRC}
+#        ../test/test_fiber.cpp
+#)
+#target_link_libraries(TestFiber yaml-cpp)
+
+#[[Schedule系统测试]]
 add_executable(
-        TestFiber
+        TestSchedule
         ${LIB_SRC}
-        ../test/test_fiber.cpp
+        ../test/test_scheduler.cpp
 )
-target_link_libraries(TestFiber yaml-cpp)
+target_link_libraries(TestSchedule yaml-cpp)
 
 
