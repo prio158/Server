@@ -4,7 +4,7 @@ project(Server)
 SET(CMAKE_CXX_STANDARD 11)
 add_definitions("-Wall -g")
 
-SET(USR_PATH /usr/local/)
+SET(USR_PATH /usr/)
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../bin)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../lib)
 
