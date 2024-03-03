@@ -107,7 +107,7 @@ namespace Server {
         for (size_t index = 0; index < m_threadCount; index++) {
             tickle();
         }
-        ///main fiber execute finish
+        ///schedule fiber start execute runs
         if (m_scheduleFiber) {
             if (!stopping())
                 m_scheduleFiber->call();
@@ -184,7 +184,7 @@ namespace Server {
                 --m_activeThreadCount;
                 if (ft.fiber->getState() == Fiber::READY) {
                     /// 如果ft.fiber在READY狀態中，丢进消息队列
-                    schedule(ft.fiber);
+                    post(ft.fiber);
                 } else if (isStateTermAndExcept(ft.fiber)) {
                     ///　ft.fiber如果没有结束，进入暂停状态
                     ft.fiber->m_state = Fiber::HOLD;
@@ -203,7 +203,7 @@ namespace Server {
                 --m_activeThreadCount;
                 ///cb_fiber协程执行完后，回到这里，然后在执行到这里
                 if (cb_fiber->getState() == Fiber::READY) {
-                    schedule(cb_fiber);
+                    post(cb_fiber);
                     cb_fiber.reset();
                 } else if (isStateTermOrExcept(cb_fiber)) {
                     cb_fiber->reset(nullptr);
@@ -224,7 +224,7 @@ namespace Server {
                     break;
                 }
                 ++m_idleThreadCount;
-                LOGD(logger) << "Idle fiber will swapIn";
+                //LOGD(logger) << "Idle fiber will swapIn";
                 idle_fiber->swapIn();
                 --m_idleThreadCount;
                 if (isStateTermAndExcept(idle_fiber)) {
@@ -241,11 +241,11 @@ namespace Server {
     ///协程没有任务做，且所在的线程又不能终止，那就让它执行idle，这个方法
     ///是一个虚函数，具体由子类完成
     void Scheduler::idle() {
-//        while (!stopping()) {
-//            LOGD(logger) << "Idle fiber running...";
-//            Fiber::YieldToHold();
-//        }
-        LOGI(logger) << "Idle fiber running";
+        LOGD(logger) << "Idle fiber running...";
+        while (!stopping()) {
+            Fiber::YieldToHold();
+        }
+        //LOGI(logger) << "Idle fiber running";
     }
 
     bool Scheduler::stopping() {

@@ -59,11 +59,11 @@ namespace Server {
 
         /**
          * @brief 调度协程,将任务压入消息队列
-         * @param[in] fc 协程或函数
-         * @param[in] thread 协程执行的线程id,-1标识任意线程
+         * @param[in] fc task unit
+         * @param[in] thread task unit执行的线程id,-1标识任意线程
          */
         template<class FiberOrCb>
-        void schedule(FiberOrCb fc, int thread = -1) {
+        void post(FiberOrCb fc, int thread = -1) {
             bool need_tickle = false;
             {
                 MutexType::Lock lock(m_mutex);
@@ -81,7 +81,7 @@ namespace Server {
          * @param[in] end 协程数组的结束
          */
         template<class InputIterator>
-        void schedule(InputIterator begin, InputIterator end) {
+        void post(InputIterator begin, InputIterator end) {
             bool need_tickle = false;
             {
                 MutexType::Lock lock(m_mutex);

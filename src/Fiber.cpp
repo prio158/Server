@@ -119,8 +119,8 @@ namespace Server {
         SERVER_ASSERT(m_state != EXEC)
         m_state = EXEC;
         /// old fiber context ----> new fiber context
-        LOGD(LOG_ROOT()) << "Fiber::swapIn==>" << "[FiberId:" <<
-                         Scheduler::GetMainScheduleFiber()->m_id << "]" << "--->" << "[FiberId:" << m_id << "]";
+//        LOGD(LOG_ROOT()) << "Fiber::swapIn==>" << "[FiberId:" <<
+//                         Scheduler::GetMainScheduleFiber()->m_id << "]" << "--->" << "[FiberId:" << m_id << "]";
         if (swapcontext(&(Scheduler::GetMainScheduleFiber()->m_ctx), &m_ctx)) {
             SERVER_ASSERT2(false, "swapcontext");
         }
@@ -129,8 +129,8 @@ namespace Server {
     void Fiber::swapOut() {
         /// old fiber context ----> new fiber context
         SetThis(Scheduler::GetMainScheduleFiber());
-        LOGD(LOG_ROOT()) << "Fiber::swapOut==>" << "[FiberId:" << m_id << "]" << "--->" << "[FiberId:"
-                         << Scheduler::GetMainScheduleFiber()->m_id << "]";
+//        LOGD(LOG_ROOT()) << "Fiber::swapOut==>" << "[FiberId:" << m_id << "]" << "--->" << "[FiberId:"
+//                         << Scheduler::GetMainScheduleFiber()->m_id << "]";
         if (swapcontext(&m_ctx, &(Scheduler::GetMainScheduleFiber()->m_ctx))) {
             SERVER_ASSERT2(false, "swap context")
         }
