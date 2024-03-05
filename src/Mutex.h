@@ -21,14 +21,23 @@ namespace Server {
     public:
 
         /**
+         * 互斥量的初始值为1，表示对共享数据区域，每次只能一个线程去访问，相当于串行访问公共数据区域，虽然安全，但是并发性差。
          * 信号量：相当于初始化值为count的互斥量，表示每次允许N个线程并发（同时）访问公共数据区域。
          * */
         explicit Semaphore(uint32_t count = 0);
 
         ~Semaphore();
 
+        /**
+         * @brief sem_wait: 信号量＞０，则信号量－－，不会阻塞
+         * 　　　　　　　　　　信号量＝０，造成线程阻塞
+         * */
         void wait();
 
+        /**
+         * @brief sem_post: 信号量++，同时唤醒阻塞在信号量上的线程
+         * 　　　　　　　　　　
+         * */
         void notify();
 
     public:

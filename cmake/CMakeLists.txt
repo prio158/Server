@@ -4,7 +4,7 @@ project(Server)
 SET(CMAKE_CXX_STANDARD 11)
 add_definitions("-Wall -g")
 
-SET(USR_PATH /usr/)
+SET(USR_PATH /usr/local)
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../bin)
 SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/../lib)
 
@@ -25,6 +25,8 @@ SET(
         ../src/Scheduler.h
         ../src/Mutex.cpp
         ../src/Mutex.h
+        ../src/IOSchedule.cpp
+        ../src/IOSchedule.h
 )
 
 include_directories(../src ${USR_PATH}/include)

@@ -125,12 +125,12 @@ namespace Server {
     }
 
     void Scheduler::tickle() {
-        LOGI(logger) << "tickle";
+        LOGI(logger) << "Scheduler::tickle";
     }
 
     ///协程调度模块的核心部分：协调协程与线程之间的调度
     void Scheduler::run() {
-        LOGD(logger) << m_name << " scheduler::run";
+        LOGD(logger) << m_name << " Scheduler::run";
         ///把当前的Schedule设置到t_scheduler
         setThis();
         if (GetThreadId() != m_mainThreadId) {
@@ -245,7 +245,6 @@ namespace Server {
         while (!stopping()) {
             Fiber::YieldToHold();
         }
-        //LOGI(logger) << "Idle fiber running";
     }
 
     bool Scheduler::stopping() {
