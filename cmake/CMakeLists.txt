@@ -47,7 +47,7 @@ link_directories(${USR_PATH}/lib)
 #add_executable(
 #        TestConfigYAML
 #        ${LOG_LIB_SRC}
-#        ../test/testYamlConfig.cpp
+#        ../test/test_yaml_config.cpp
 #)
 #target_link_libraries(TestConfigYAML yaml-cpp)
 
@@ -76,11 +76,17 @@ link_directories(${USR_PATH}/lib)
 #target_link_libraries(TestFiber yaml-cpp)
 
 #[[Schedule系统测试]]
+#add_executable(
+#        TestSchedule
+#        ${LIB_SRC}
+#        ../test/test_scheduler.cpp
+#)
+#target_link_libraries(TestSchedule yaml-cpp)
+
+#[[IO Schedule系统测试]]
 add_executable(
-        TestSchedule
+        TestIOSchedule
         ${LIB_SRC}
-        ../test/test_scheduler.cpp
+        ../test/test_io_schedule.cpp
 )
-target_link_libraries(TestSchedule yaml-cpp)
-
-
+target_link_libraries(TestIOSchedule yaml-cpp)

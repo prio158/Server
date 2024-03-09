@@ -7,6 +7,7 @@
 
 #include "Scheduler.h"
 #include <sys/epoll.h>
+#include <csignal>
 
 namespace Server {
 
@@ -40,7 +41,7 @@ namespace Server {
     public:
         explicit IOSchedule(size_t threads = 1, bool use_caller = true, const std::string &name = "");
 
-        ~IOSchedule();
+        ~IOSchedule() override ;
 
         /**
          * @brief register new event to listen
@@ -55,6 +56,8 @@ namespace Server {
         bool cancelAllEvent(int fd);
 
         static IOSchedule *GetThis();
+
+        bool stopping(uint64_t& timeout) ;
 
     protected:
         void tickle() override;
@@ -103,9 +106,7 @@ namespace Server {
              */
             void resetContext(EventContext &ctx);
 
-            ~FdContext() {
-
-            }
+            ~FdContext() = default;
 
             /// 事件关联的句柄
             int fd = 0;
@@ -124,7 +125,7 @@ namespace Server {
         int m_tickleFds[2];
         ///等待执行的事件数,剩余要执行的任务数
         std::atomic<size_t> m_pendingEventCount = {0};
-        RWMutexType m_mutext{};
+        RWMutexType m_mutex{};
         std::vector<FdContext *> m_fdContexts;
     };
 

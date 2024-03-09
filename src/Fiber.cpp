@@ -178,7 +178,7 @@ namespace Server {
     void Fiber::MainFunc() {
         Fiber::ptr currentFiber = GetThis();
         SERVER_ASSERT(currentFiber)
-        LOGD(LOG_ROOT()) << "Id=" << currentFiber->m_id << " Fiber::MainFunc Execute";
+        LOGD(LOG_ROOT()) << " Fiber::MainFunc Execute";
         try {
             currentFiber->m_cb();
             currentFiber->m_cb = nullptr;
@@ -201,7 +201,7 @@ namespace Server {
     void Fiber::MainFuncCaller() {
         Fiber::ptr currentFiber = GetThis();
         SERVER_ASSERT(currentFiber)
-        LOGD(LOG_ROOT()) << "Id=" << currentFiber->m_id << " Fiber::MainFuncCaller Execute";
+        LOGD(LOG_ROOT()) << "Fiber::MainFuncCaller Execute";
         try {
             currentFiber->m_cb();
             currentFiber->m_cb = nullptr;

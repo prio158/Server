@@ -31,7 +31,11 @@ namespace Server {
             --threads;
             SERVER_ASSERT(GetThis() == nullptr)
             t_scheduler = this;
-            /// 这个创建的协程是调度协程，用来调度任务的，所以Scheduler::run是调度方法
+            /// 这个创建的协程是调度协程，用来调度任务的，fiberId=0, Scheduler::run是调度方法
+            /// 那这个Scheduler::run什么时候被调用呢？ 或者更广泛地说，Fiber的callback什么时候被调有呢？
+            /// 在执行swapcontext(其他Fiber->m_ctx, currentFiber->m_ctx)之后，就会调用currentFiber　callback
+            /// 而swapcontext(其他Fiber->m_ctx, currentFiber->m_ctx)其实就是为了将currentFiber->m_ctx切换到执行栈上，
+            /// 为currentFiber　callback的执行做铺垫．
             m_scheduleFiber.reset(new Fiber(std::bind(&Scheduler::run, this), 0,true));
             Thread::SetName(m_name);
             t_main_schedule_fiber = m_scheduleFiber.get();
@@ -62,7 +66,7 @@ namespace Server {
     ///start thread pool, create m_threadCount thread
     void Scheduler::start() {
         MutexType::Lock lock(m_mutex);
-        LOGD(logger) << m_name << " schedule::start";
+        LOGD(logger) << m_name << " Schedule::start";
         if (!m_stopping) {
             return;
         }
@@ -86,7 +90,7 @@ namespace Server {
         m_auto_stop = true;
         if (m_scheduleFiber && m_threadCount == 0 &&
             (m_scheduleFiber->getState() == Fiber::TERM || m_scheduleFiber->getState() == Fiber::INIT)) {
-            LOGI(logger) << m_name << " stopped";
+            LOGD(logger) << "Scheduler::stop";
             m_stopping = true;
             if (stopping()) {
                 return;
@@ -165,10 +169,10 @@ namespace Server {
                     }
                     ///取出任务
                     ft = *it;
-                    ++m_activeThreadCount;
                     is_active = true;
                     ///从消息队列中删除任务
                     m_task_queue.erase(it);
+                    ++m_activeThreadCount;
                     break;
                 }
                 tickle_me |= it != m_task_queue.end();
@@ -179,7 +183,6 @@ namespace Server {
 
             ///如果有要执行的协程,且状态不是结束状态
             if (ft.fiber && isStateTermAndExcept(ft.fiber)) {
-                ++m_activeThreadCount;
                 ft.fiber->swapIn();
                 --m_activeThreadCount;
                 if (ft.fiber->getState() == Fiber::READY) {
@@ -198,7 +201,6 @@ namespace Server {
                     cb_fiber.reset(new Fiber(ft.cb));
 
                 ft.reset();
-                ++m_activeThreadCount;
                 cb_fiber->swapIn();
                 --m_activeThreadCount;
                 ///cb_fiber协程执行完后，回到这里，然后在执行到这里
@@ -238,17 +240,34 @@ namespace Server {
         t_scheduler = this;
     }
 
-    ///协程没有任务做，且所在的线程又不能终止，那就让它执行idle，这个方法
+    ///协程没有任务做，且所在的线程又不能终止，那就让它执行idle协程，这个方法
     ///是一个虚函数，具体由子类完成
     void Scheduler::idle() {
         LOGD(logger) << "Idle fiber running...";
-        while (!stopping()) {
-            Fiber::YieldToHold();
-        }
+//        while (!stopping()) {
+//            Fiber::YieldToHold();
+//        }
     }
 
     bool Scheduler::stopping() {
+        MutexType::Lock lock(m_mutex);
         return m_auto_stop && m_stopping && m_task_queue.empty() && m_activeThreadCount == 0;
+    }
+
+    std::ostream &Scheduler::dump(std::ostream &os) {
+        os << "[Scheduler name=" << m_name
+           << " size=" << m_threadCount
+           << " active_count=" << m_activeThreadCount
+           << " idle_count=" << m_idleThreadCount
+           << " stopping=" << m_stopping
+           << " ]" << std::endl << "    ";
+        for (size_t i = 0; i < m_threadIds.size(); ++i) {
+            if (i) {
+                os << ", ";
+            }
+            os << m_threadIds[i];
+        }
+        return os;
     }
 
 

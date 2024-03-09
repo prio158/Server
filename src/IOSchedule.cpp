@@ -26,11 +26,12 @@ namespace Server {
 
     IOSchedule::IOSchedule(size_t threads, bool use_caller, const std::string &name) :
             Scheduler(threads, use_caller, name) {
+        LOGD(LOG_ROOT()) << "IOSchedule::IOSchedule";
         m_epfd = epoll_create(1);
         SERVER_ASSERT(m_epfd > 0)
         int ret = pipe(m_tickleFds);
-        SERVER_ASSERT(ret > 0)
-        epoll_event event;
+        SERVER_ASSERT(ret == 0)
+        epoll_event event{};
         memset(&event, 0, sizeof(event));
         ///EPOLLET：缓冲区剩余未读尽的数据不会导致epoll_wait返回，只有新的事件满足才会触发
         ///设置监听的事件类型（EPOLLIN：监听读事件，当有读请求事件过来，epoll_wait解除阻塞）
@@ -38,15 +39,16 @@ namespace Server {
         event.events = EPOLLIN | EPOLLET;
         event.data.fd = m_tickleFds[0];
         ret = fcntl(m_tickleFds[0], F_SETFL, O_NONBLOCK);
-        SERVER_ASSERT(ret)
+        SERVER_ASSERT(ret >= 0)
         ret = epoll_ctl(m_epfd, EPOLL_CTL_ADD, m_tickleFds[0], &event);
-        SERVER_ASSERT(ret)
+        SERVER_ASSERT(ret == 0)
         contextArrayResize(64);
         start();
     }
 
 
     IOSchedule::~IOSchedule() {
+        LOGD(LOG_ROOT()) << "IOSchedule::~IOSchedule";
         stop();
         close(m_epfd);
         close(m_tickleFds[0]);
@@ -58,13 +60,13 @@ namespace Server {
 
     int IOSchedule::addEvent(int fd, IOSchedule::Event event, std::function<void()> callback) {
         FdContext *fdContext = nullptr;
-        RWMutexType::ReadLock lock(m_mutext);
+        RWMutexType::ReadLock lock(m_mutex);
         if (m_fdContexts.size() > fd) {
             fdContext = m_fdContexts[fd];
             lock.unlock();
         } else {
             lock.unlock();
-            RWMutexType::WriteLock lock2(m_mutext);
+            RWMutexType::WriteLock lock2(m_mutex);
             contextArrayResize(fd * 1.5);
             fdContext = m_fdContexts[fd];
         }
@@ -80,7 +82,7 @@ namespace Server {
         }
 
         int op = fdContext->m_events ? EPOLL_CTL_MOD : EPOLL_CTL_ADD;
-        epoll_event ep_event;
+        epoll_event ep_event{};
         ep_event.data.fd = fd;
         ep_event.data.ptr = fdContext;
         ///注册要监听的事件
@@ -105,16 +107,16 @@ namespace Server {
     }
 
     bool IOSchedule::removeEvent(int fd, IOSchedule::Event event) {
-        RWMutexType::ReadLock lock(m_mutext);
+        RWMutexType::ReadLock lock(m_mutex);
         if (m_fdContexts.size() <= fd) return false;
         auto fd_ctx = m_fdContexts[fd];
         lock.unlock();
 
         FdContext::MutexType::Lock lock2(fd_ctx->mutex);
         if (!(fd_ctx->m_events & event)) return false;
-        Event new_event = (Event) (fd_ctx->m_events & ~event);
+        auto new_event = (Event) (fd_ctx->m_events & ~event);
         int op = new_event ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-        epoll_event ep_event;
+        epoll_event ep_event{};
         ep_event.events = EPOLLET | new_event;
         ep_event.data.ptr = fd_ctx;
         int ret = epoll_ctl(m_epfd, op, fd_ctx->fd, &ep_event);
@@ -131,7 +133,7 @@ namespace Server {
 
     ///找到event事件删除，并强制执行事件
     bool IOSchedule::cancelEvent(int fd, IOSchedule::Event event) {
-        RWMutexType::ReadLock lock(m_mutext);
+        RWMutexType::ReadLock lock(m_mutex);
         if (m_fdContexts.size() < fd) return false;
         auto fd_ctx = m_fdContexts[fd];
         lock.unlock();
@@ -139,9 +141,9 @@ namespace Server {
         FdContext::MutexType::Lock lock2(fd_ctx->mutex);
         ///　没有找到对应的ｅｖｅｎｔ事件就退出
         if (!(fd_ctx->m_events & event)) return false;
-        Event new_event = (Event) (fd_ctx->m_events & ~event);
+        auto new_event = (Event) (fd_ctx->m_events & ~event);
         int op = new_event ? EPOLL_CTL_MOD : EPOLL_CTL_DEL;
-        epoll_event ep_event;
+        epoll_event ep_event{};
         ep_event.events = EPOLLET | new_event;
         ep_event.data.ptr = fd_ctx;
         int ret = epoll_ctl(m_epfd, op, fd_ctx->fd, &ep_event);
@@ -155,7 +157,7 @@ namespace Server {
     }
 
     bool IOSchedule::cancelAllEvent(int fd) {
-        RWMutexType::ReadLock lock(m_mutext);
+        RWMutexType::ReadLock lock(m_mutex);
         if (m_fdContexts.size() < fd) return false;
         auto fd_ctx = m_fdContexts[fd];
         lock.unlock();
@@ -163,7 +165,7 @@ namespace Server {
         FdContext::MutexType::Lock lock2(fd_ctx->mutex);
         if (!fd_ctx->m_events) return false;
         int op = EPOLL_CTL_DEL;
-        epoll_event ep_event;
+        epoll_event ep_event{};
         ep_event.events = 0;
         ep_event.data.ptr = fd_ctx;
         int ret = epoll_ctl(m_epfd, op, fd, &ep_event);
@@ -199,25 +201,35 @@ namespace Server {
         SERVER_ASSERT(rt == 1)
     }
 
+    bool IOSchedule::stopping(uint64_t &timeout) {
+        return m_pendingEventCount == 0 && Scheduler::stopping();
+
+    }
+
+
     bool IOSchedule::stopping() {
         return Scheduler::stopping() && m_pendingEventCount == 0;
     }
 
+    ///如果没有事件（任务）处理，就陷入epoll_wait
     void IOSchedule::idle() {
-        auto *events = new epoll_event[64]();
+        LOGD(LOG_ROOT()) << "IOSchedule::idle";
+        const uint64_t MAX_EVENTS = 256;
+        auto *events = new epoll_event[MAX_EVENTS]();
         std::shared_ptr<epoll_event> shared_events(events, [](epoll_event *ptr) {
             delete[] ptr;
         });
-        int rt = 0;
+
         while (true) {
-            if (stopping()) {
+            uint64_t next_timeout = 0;
+            if (stopping(next_timeout )) {
                 LOGD(LOG_ROOT()) << "name=" << getName() << " idle stopping exit";
                 break;
             }
-
+            int rt;
             do {
                 static const int MAX_TIME_OUT = 5000;
-                /// 陷入到epoll_wait中５ｓ，如果没有事件回来，这里也会唤醒
+                /// 陷入到epoll_wait中５ｓ，如果没有事件回来，这里也会唤醒,epoll_wait return wake events
                 rt = epoll_wait(m_epfd, shared_events.get(), 64, MAX_TIME_OUT);
                 ///https://blog.csdn.net/hnlyyk/article/details/51444617
                 ///　预防在没有事件回来时，操作系统强制中断epoll_wait慢系统调用
@@ -230,16 +242,16 @@ namespace Server {
             for (int i = 0; i < rt; i++) {
                 auto &event = events[i];
                 if (event.data.fd == m_tickleFds[0]) {
-                    uint8_t dummy;
+                    uint8_t dummy[256];
                     /// ＥＴ触发方式，所以m_tickleFds[0]指向的缓冲区可能还有残余数据，
                     /// 这里读干净
-                    while (read(m_tickleFds[0], &dummy, 1) == 1);
+                    while (read(m_tickleFds[0], &dummy, 1) > 0);
                     continue;
                 }
                 auto *fdContext = (FdContext *) event.data.ptr;
                 FdContext::MutexType::Lock lock(fdContext->mutex);
                 if (event.events & (EPOLLIN | EPOLLOUT)) {
-                    event.events |= EPOLLIN | EPOLLOUT;
+                    event.events |= (EPOLLIN | EPOLLOUT) & fdContext->m_events;
                 }
                 /// 记录要触发的事件
                 int real_events = NONE;
@@ -280,7 +292,6 @@ namespace Server {
             auto raw_ptr = curFiber.get();
             curFiber.reset();
             raw_ptr->swapOut();
-
         }
     }
 
@@ -294,7 +305,6 @@ namespace Server {
             }
         }
     }
-
 
     IOSchedule::FdContext::EventContext &IOSchedule::FdContext::getContext(IOSchedule::Event event) {
         switch (event) {
@@ -323,7 +333,6 @@ namespace Server {
             ctx.scheduler->post(ctx.fiber);
         }
         ctx.scheduler = nullptr;
-        return;
     }
 
 

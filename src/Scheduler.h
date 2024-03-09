@@ -15,6 +15,10 @@
 ///协程调度：协程在线程之际切换，一个线程中有一堆协程，如果这个线程很繁忙，那么它底下的协程可以切换到其他空闲的线程上执行。
 ///scheduler ----》 N个线程Thread ----》M个线程Thread ----》 多个协程
 ///协程调度：让协程在线程之间自由切换，将协程指定到相应的线程上执行 （N：M）
+/// t_thread_fiber是main fiber, FiberId = 0
+/// m_scheduleFiber是用来做调度的Fiber，FiberId = 1
+/// idle_fiber 是调度器空闲下来时执行的Fiber　，　FiberId = 2
+/// Fiber Id > 2 的Fiber才是执行任务的Fiber
 namespace Server {
 
     class Scheduler {
@@ -55,6 +59,8 @@ namespace Server {
          * @brief 停止协程调度器
          */
         void stop();
+
+        std::ostream& dump(std::ostream& os);
 
         /**
          * @brief 调度协程,将任务压入消息队列
