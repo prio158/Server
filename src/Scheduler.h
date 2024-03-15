@@ -60,7 +60,7 @@ namespace Server {
          */
         void stop();
 
-        std::ostream& dump(std::ostream& os);
+        std::ostream &dump(std::ostream &os);
 
         /**
          * @brief 调度协程,将任务压入消息队列
@@ -91,8 +91,8 @@ namespace Server {
             {
                 MutexType::Lock lock(m_mutex);
                 while (begin != end) {
+                    need_tickle = scheduleNoLock(&*begin, -1) || need_tickle;
                     begin++;
-                    need_tickle = scheduleNoLock(&(*begin)) || need_tickle;
                 }
                 if (need_tickle)
                     tickle();
@@ -136,7 +136,7 @@ namespace Server {
          * @brief 协程调度启动(无锁)
          */
         template<class FiberOrCb>
-        bool scheduleNoLock(FiberOrCb fc, int thread = -1) {
+        bool scheduleNoLock(FiberOrCb fc, int thread) {
             bool need_tickle = m_task_queue.empty();
             FiberAndThread ft(fc, thread);
             if (ft.fiber || ft.cb) {
@@ -166,8 +166,11 @@ namespace Server {
                 fiber.swap(*f);
             }
 
-            FiberAndThread(std::function<void()> f, int thread) : threadId(thread) {
-                cb.swap(f);
+            FiberAndThread(std::function<void()> f, int thread) : cb(std::move(f)), threadId(thread) {
+            }
+
+            FiberAndThread(std::function<void()> *f, int thread) : threadId(thread) {
+                cb.swap(*f);
             }
 
             FiberAndThread() : threadId(-1) {}

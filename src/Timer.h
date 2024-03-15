@@ -11,6 +11,7 @@
 #include "Util.h"
 #include <functional>
 #include <set>
+#include <vector>
 
 ///enable_shared_from_this的用法：https://blog.csdn.net/breadheart/article/details/112451022
 namespace Server {
@@ -25,26 +26,28 @@ namespace Server {
 
         explicit Timer(uint64_t ms, std::function<void()> cb, TimerManager *manager,bool recurring = false);
 
+        explicit Timer(uint64_t next);
+
         /* return shared this*/
         ptr GetThis() {
             return shared_from_this();
         }
 
-        /* addTimeTask*/
+        bool cancel();
 
-        /* cancelTimeTask*/
+        /* 更新该定时器的执行时间为now + m_ms */
+        bool refresh();
 
-        /* 获取当前定时器触发离现在的时间差*/
+        bool reset(uint64_t ms,bool from_now);
 
-        /* 返回当前需要触发的定时器　*/
     private:
         //是否循环定时器
         bool m_recurring = false;
         //执行周期　　　
         uint64_t m_ms = 0;
-        //精确的执行时间
+        //定期器的执行时间
         uint64_t m_next = 0;
-
+        //定时器要执行的任务
         std::function<void()> m_cb;
 
         TimerManager* m_manager = nullptr;
@@ -77,19 +80,36 @@ namespace Server {
         Timer::ptr addTimer(uint64_t ms, std::function<void()> cb, bool recurring = false);
 
         ///添加条件定时器任务
-        ///std::weak_ptr<void> weak_cond，通过智能指针修饰条件，借助 weak_ptr 类型指针，
+        ///std::weak_ptr<void> weak_cond，通过智能指针修饰条件，借助 weak_ptr 类型指针，(不会使这个对象的引用计数＋１)
         ///我们可以获取 shared_ptr 指针的一些状态信息，比如有多少指向相同的 shared_ptr 指针
         ///如果没有指向shared_ptr的指针，代表条件结束．https://c.biancheng.net/view/7918.html
-        Timer::ptr addConditionTimer(uint64_t ms, std::function<void()> cb, std::weak_ptr<void> weak_cond, bool recurring = false);
+        Timer::ptr addConditionTimer(uint64_t ms, const std::function<void()>& cb, const std::weak_ptr<void>& weak_cond, bool recurring = false);
+
+        ///获取下一个定时器执行的时间
+        uint64_t getNextTimer();
+
+        ///返回已经超时的定时器
+        void listExpiredTimer(std::vector<std::function<void()>>& cbs);
+
+        bool hasTimer();
+
+    private:
+        /**
+         * @brief 检测服务器时间是否被调后了
+         */
+        bool detectClockRollover(uint64_t now_ms);
 
     protected:
         /// notify
         virtual void onTimerInsertedAtFront() = 0;
+        void addTimer(const Timer::ptr& timer);
 
     private:
         RWMutexType m_mutex;
         std::set<Timer::ptr, Timer::Comparator> m_timers;
-
+        bool m_tickled = false;
+        /// 上次执行时间
+        uint64_t m_preTime{};
     };
 }
 

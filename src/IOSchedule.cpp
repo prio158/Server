@@ -202,13 +202,15 @@ namespace Server {
     }
 
     bool IOSchedule::stopping(uint64_t &timeout) {
-        return m_pendingEventCount == 0 && Scheduler::stopping();
+        timeout = getNextTimer();
+        return timeout == ~0ull && m_pendingEventCount == 0 && Scheduler::stopping();
 
     }
 
 
     bool IOSchedule::stopping() {
-        return Scheduler::stopping() && m_pendingEventCount == 0;
+        uint64_t timeout = 0;
+        return stopping(timeout);
     }
 
     ///如果没有事件（任务）处理，就陷入epoll_wait
@@ -222,20 +224,32 @@ namespace Server {
 
         while (true) {
             uint64_t next_timeout = 0;
-            if (stopping(next_timeout )) {
+            if (stopping(next_timeout)) {
                 LOGD(LOG_ROOT()) << "name=" << getName() << " idle stopping exit";
                 break;
             }
+
             int rt;
             do {
-                static const int MAX_TIME_OUT = 5000;
+                static const int MAX_TIME_OUT = 3000;
+                if (next_timeout != ~0ull) {
+                    next_timeout = next_timeout > MAX_TIME_OUT ? MAX_TIME_OUT : next_timeout;
+                } else next_timeout = MAX_TIME_OUT;
                 /// 陷入到epoll_wait中５ｓ，如果没有事件回来，这里也会唤醒,epoll_wait return wake events
-                rt = epoll_wait(m_epfd, shared_events.get(), 64, MAX_TIME_OUT);
+                rt = epoll_wait(m_epfd, shared_events.get(), 64, (int) next_timeout);
                 ///https://blog.csdn.net/hnlyyk/article/details/51444617
-                ///　预防在没有事件回来时，操作系统强制中断epoll_wait慢系统调用
+                ///预防在没有事件回来时，操作系统强制中断epoll_wait慢系统调用
                 if (rt < 0 && errno == EINTR) {
                 } else break;
             } while (true);
+
+            /// 启动定时任务
+            std::vector<std::function<void(void)>> cbs;
+            listExpiredTimer(cbs);
+            if (!cbs.empty()) {
+                post(cbs.begin(), cbs.end());
+                cbs.clear();
+            }
 
             /// epoll_wait 返回的触发的事件数,IOSchedule的构造函数里面监听就是m_tickleFds[0]，
             /// m_tickleFds[0]是一个只读的ｆｄ，任务就是起一个通知的作用，报告有事情请求过来了．
@@ -304,6 +318,10 @@ namespace Server {
                 m_fdContexts[i] = fdContext;
             }
         }
+    }
+
+    void IOSchedule::onTimerInsertedAtFront() {
+        tickle();
     }
 
     IOSchedule::FdContext::EventContext &IOSchedule::FdContext::getContext(IOSchedule::Event event) {

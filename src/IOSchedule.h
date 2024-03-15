@@ -6,6 +6,7 @@
 #define SERVER_IOSCHEDULE_H
 
 #include "Scheduler.h"
+#include "Timer.h"
 #include <sys/epoll.h>
 #include <csignal>
 
@@ -23,7 +24,7 @@ namespace Server {
     ///所以此时唤醒epoll_wait的方式有两种：
     /// 　［１］等待的消息返回了
     /// 　［２］消息队列中来消息了　　　
-    class IOSchedule : public Scheduler {
+    class IOSchedule : public Scheduler, public TimerManager {
 
     public:
         typedef std::shared_ptr<IOSchedule> ptr;
@@ -41,7 +42,7 @@ namespace Server {
     public:
         explicit IOSchedule(size_t threads = 1, bool use_caller = true, const std::string &name = "");
 
-        ~IOSchedule() override ;
+        ~IOSchedule() override;
 
         /**
          * @brief register new event to listen
@@ -57,7 +58,7 @@ namespace Server {
 
         static IOSchedule *GetThis();
 
-        bool stopping(uint64_t& timeout) ;
+        bool stopping(uint64_t &timeout);
 
     protected:
         void tickle() override;
@@ -67,6 +68,8 @@ namespace Server {
         void idle() override;
 
         void contextArrayResize(size_t size);
+
+        void onTimerInsertedAtFront() override;
 
     public:
         /**
