@@ -27,6 +27,8 @@ SET(
         ../src/Mutex.h
         ../src/IOSchedule.cpp
         ../src/IOSchedule.h
+        ../src/Timer.cpp
+        ../src/Timer.h
 )
 
 include_directories(../src ${USR_PATH}/include)
@@ -84,9 +86,17 @@ link_directories(${USR_PATH}/lib)
 #target_link_libraries(TestSchedule yaml-cpp)
 
 #[[IO Schedule系统测试]]
+#add_executable(
+#        TestIOSchedule
+#        ${LIB_SRC}
+#        ../test/test_io_schedule.cpp
+#)
+#target_link_libraries(TestIOSchedule yaml-cpp)
+
+#[[定时器系统测试]]
 add_executable(
-        TestIOSchedule
+        TestTimer
         ${LIB_SRC}
-        ../test/test_io_schedule.cpp
+        ../test/test_timer.cpp
 )
-target_link_libraries(TestIOSchedule yaml-cpp)
+target_link_libraries(TestTimer yaml-cpp)

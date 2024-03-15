@@ -7,9 +7,10 @@
 
 #include <cstdint>
 #include <thread>
-#include<pthread.h>
-#include<unistd.h>
+#include <pthread.h>
+#include <unistd.h>
 #include <vector>
+#include <sys/time.h>
 
 #define RESET "\033[0m"
 #define BLACK "\033[30m"              /* Black */
@@ -36,10 +37,14 @@ namespace Server {
 
     pid_t GetThreadId();
 
+    uint64_t GetCurrentMS();
+
+    uint64_t GetCurrentUS();
+
     /// 抛出栈信息
     void Backtrace(std::vector<std::string> &bt, int size, int skip);
 
-    std::string BacktraceToString(int size = 64, std::string& prefix = (std::string &) "    ", int skip = 2);
+    std::string BacktraceToString(int size = 64, std::string &prefix = (std::string &) "    ", int skip = 2);
 }
 
 
