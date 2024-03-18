@@ -29,6 +29,8 @@ SET(
         ../src/IOSchedule.h
         ../src/Timer.cpp
         ../src/Timer.h
+        ../src/Hook.cpp
+        ../src/Hook.h
 )
 
 include_directories(../src ${USR_PATH}/include)
@@ -94,9 +96,18 @@ link_directories(${USR_PATH}/lib)
 #target_link_libraries(TestIOSchedule yaml-cpp)
 
 #[[定时器系统测试]]
+#add_executable(
+#        TestTimer
+#        ${LIB_SRC}
+#        ../test/test_timer.cpp
+#)
+#target_link_libraries(TestTimer yaml-cpp)
+
+#[[HOOK系统测试]]
 add_executable(
-        TestTimer
+        TestHook
         ${LIB_SRC}
-        ../test/test_timer.cpp
+        ../test/test_hook.cpp
 )
-target_link_libraries(TestTimer yaml-cpp)
+target_link_libraries(TestHook yaml-cpp)
+

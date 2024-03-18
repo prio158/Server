@@ -14,13 +14,18 @@ namespace Server {
     static thread_local Scheduler *t_scheduler = nullptr; // 当前schedule
     static thread_local Fiber *t_main_schedule_fiber = nullptr; // main schedule fiber
 
-    static bool isStateTermOrExcept(const Fiber::ptr &fiber) {
+    static bool isStateNotTermOrExcept(const Fiber::ptr &fiber) {
         return fiber->getState() != Fiber::TERM || fiber->getState() != Fiber::EXCEPT;
     }
 
-    static bool isStateTermAndExcept(const Fiber::ptr &fiber) {
+    static bool isStateNotTermAndExcept(const Fiber::ptr &fiber) {
         return fiber->getState() != Fiber::TERM && fiber->getState() != Fiber::EXCEPT;
     }
+
+    static bool isStateTermOrExcept(const Fiber::ptr &fiber){
+        return fiber->getState() == Fiber::EXCEPT || fiber->getState() == Fiber::TERM;
+    }
+
 
     Scheduler::Scheduler(size_t threads, bool use_caller, std::string name) : m_name(std::move(name)) {
         SERVER_ASSERT(threads > 0)
@@ -36,7 +41,7 @@ namespace Server {
             /// 在执行swapcontext(其他Fiber->m_ctx, currentFiber->m_ctx)之后，就会调用currentFiber　callback
             /// 而swapcontext(其他Fiber->m_ctx, currentFiber->m_ctx)其实就是为了将currentFiber->m_ctx切换到执行栈上，
             /// 为currentFiber　callback的执行做铺垫．
-            m_scheduleFiber.reset(new Fiber(std::bind(&Scheduler::run, this), 0,true));
+            m_scheduleFiber.reset(new Fiber(std::bind(&Scheduler::run, this), 0, true));
             Thread::SetName(m_name);
             t_main_schedule_fiber = m_scheduleFiber.get();
             m_mainThreadId = GetThreadId();
@@ -135,6 +140,7 @@ namespace Server {
     ///协程调度模块的核心部分：协调协程与线程之间的调度
     void Scheduler::run() {
         LOGD(logger) << m_name << " Scheduler::run";
+        set_hook_enable(true);
         ///把当前的Schedule设置到t_scheduler
         setThis();
         if (GetThreadId() != m_mainThreadId) {
@@ -182,13 +188,13 @@ namespace Server {
                 tickle(); ///通知其他线程
 
             ///如果有要执行的协程,且状态不是结束状态
-            if (ft.fiber && isStateTermAndExcept(ft.fiber)) {
+            if (ft.fiber && isStateNotTermAndExcept(ft.fiber)) {
                 ft.fiber->swapIn();
                 --m_activeThreadCount;
                 if (ft.fiber->getState() == Fiber::READY) {
                     /// 如果ft.fiber在READY狀態中，丢进消息队列
                     post(ft.fiber);
-                } else if (isStateTermAndExcept(ft.fiber)) {
+                } else if(isStateNotTermAndExcept(ft.fiber)){
                     ///　ft.fiber如果没有结束，进入暂停状态
                     ft.fiber->m_state = Fiber::HOLD;
                 }
@@ -229,7 +235,7 @@ namespace Server {
                 //LOGD(logger) << "Idle fiber will swapIn";
                 idle_fiber->swapIn();
                 --m_idleThreadCount;
-                if (isStateTermAndExcept(idle_fiber)) {
+                if (isStateNotTermAndExcept(idle_fiber)) {
                     idle_fiber->m_state = Fiber::HOLD;
                 }
             }
