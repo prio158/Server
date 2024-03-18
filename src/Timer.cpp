@@ -85,7 +85,7 @@ namespace Server {
     TimerManager::addConditionTimer(uint64_t ms, const std::function<void()> &cb, const std::weak_ptr<void> &weak_cond,
                                     bool recurring) {
 
-        return addTimer(ms, std::bind(onTimer, weak_cond, cb), recurring);
+        return addTimer(ms, [weak_cond, cb] { return onTimer(weak_cond, cb); }, recurring);
     }
 
     uint64_t TimerManager::getNextTimer() {

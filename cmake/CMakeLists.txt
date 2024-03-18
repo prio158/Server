@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.27)
 project(Server)
 
-SET(CMAKE_CXX_STANDARD 11)
+SET(CMAKE_CXX_STANDARD 20)
 add_definitions("-Wall -g")
 
 SET(USR_PATH /usr/local)
@@ -31,6 +31,8 @@ SET(
         ../src/Timer.h
         ../src/Hook.cpp
         ../src/Hook.h
+        ../src/FdManager.cpp
+        ../src/FdManager.h
 )
 
 include_directories(../src ${USR_PATH}/include)

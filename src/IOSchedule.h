@@ -19,7 +19,7 @@ namespace Server {
     ///　　pushMessage(msg,smapthone); // sem_post 信号量 +1
     ///   pollMessage(msg,smapthone); // sem_wait 信号量 -1, 如果信号量＝０，造成线程阻塞，这不好，效率低
     ///更高效的做法：
-    ///　　epoll_wait: 线程陷入epoll_wait会阻塞等待对发发消息，我们希望在epoll_wait等待对发消息唤醒的时候，
+    ///　　epoll_wait: 线程陷入epoll_wait会阻塞等待对方发消息，我们希望在epoll_wait等待对方发消息唤醒的时候，
     ///  　如果消息队列中有消息，　它能够被唤醒起来处理这个消息．任务处理完，就再次陷入epoll_wait
     ///所以此时唤醒epoll_wait的方式有两种：
     /// 　［１］等待的消息返回了
@@ -73,7 +73,7 @@ namespace Server {
 
     public:
         /**
-         * @brief Socket事件上线文类
+         * @brief Socket事件上下文
          */
         struct FdContext {
             typedef Mutex MutexType;
