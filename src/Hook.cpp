@@ -8,6 +8,8 @@
 #include "dlfcn.h"
 #include "Log.h"
 #include "FdManager.h"
+#include <fcntl.h>
+#include <stdarg.h>
 
 namespace Server {
 
@@ -87,7 +89,7 @@ namespace Server {
             return -1;
         }
         // 如果不是ｓｃｏｋｅｔ或为非阻塞
-        if (!ctx->isSocket() || ctx->getUserNonBlock()) {
+        if (!ctx->isSocket() || ctx->getUserNonblock()) {
             return fun(fd, std::forward<Args>(args)...);
         }
 
@@ -115,7 +117,7 @@ namespace Server {
             //https://c.biancheng.net/view/7918.html，下面是设置一个条件变量
             std::weak_ptr<timer_info> winfo(tinfo);
             //如果设置了超时时间，就放到条件定时器中，等待timeout_time时间后就取消ｆｄ的ｅｖｅｎｔ事件监听
-            if (timeout_time != (uint64_t) - 1) {
+            if (timeout_time != (uint64_t) -1) {
                 timer = ioSchedule->addConditionTimer(timeout_time, [winfo, fd, ioSchedule, event]() {
                     //lock:如果当前 weak_ptr 已经过期，则该函数会返回一个空的 shared_ptr 指针；
                     //反之，该函数返回一个和当前 weak_ptr 指向相同的 shared_ptr 指针。
@@ -296,8 +298,97 @@ namespace Server {
 
 
     int fcntl(int fd, int cmd, ... /* arg */ ) {
-
-
+        // <Step 1> 定义一个 va_list 类型的变量，(假设va_list 类型变量被定义为ap)；
+        // <Step 2> 调用va_start ，对ap 进行初始化，让它指向可变参数表里面的第一个参数。
+        // <Step 3> 获取参数，并使用参数。
+        // <Step 4> 获取所有的参数之后，将 ap 指针关掉。
+        va_list va;
+        va_start(va, cmd);
+        switch(cmd) {
+            case F_SETFL:
+            {
+                //它的第一个参数是ap，第二个参数是要获取的参数的指定类型。按照指定类型获取当前参数，
+                //返回这个指定类型的值，然后把 ap 的位置指向变参表中下一个变量的位置；
+                int arg = va_arg(va, int);
+                va_end(va); //释放指针ｖａ，并将ｖａ置为ｎｕｌｌ
+                FdCtx::ptr ctx = FdMgr::GetInstance()->get(fd);
+                if(!ctx || ctx->isClose() || !ctx->isSocket()) {
+                    return fcntl_f(fd, cmd, arg);
+                }
+                // socket fd
+                ctx->setUserNonblock(arg & O_NONBLOCK);
+                if(ctx->getSysNonblock()) {
+                    arg |= O_NONBLOCK;
+                } else {
+                    arg &= ~O_NONBLOCK;
+                }
+                return fcntl_f(fd, cmd, arg);
+            }
+                break;
+            case F_GETFL:
+            {
+                va_end(va);
+                int arg = fcntl_f(fd, cmd);
+                FdCtx::ptr ctx = FdMgr::GetInstance()->get(fd);
+                if(!ctx || ctx->isClose() || !ctx->isSocket()) {
+                    return arg;
+                }
+                if(ctx->getUserNonblock()) {
+                    return arg | O_NONBLOCK;
+                } else {
+                    return arg & ~O_NONBLOCK;
+                }
+            }
+                break;
+            case F_DUPFD:
+            case F_DUPFD_CLOEXEC:
+            case F_SETFD:
+            case F_SETOWN:
+            case F_SETSIG:
+            case F_SETLEASE:
+            case F_NOTIFY:
+#ifdef F_SETPIPE_SZ
+            case F_SETPIPE_SZ:
+#endif
+            {
+                int arg = va_arg(va, int);
+                va_end(va);
+                return fcntl_f(fd, cmd, arg);
+            }
+                break;
+            case F_GETFD:
+            case F_GETOWN:
+            case F_GETSIG:
+            case F_GETLEASE:
+#ifdef F_GETPIPE_SZ
+            case F_GETPIPE_SZ:
+#endif
+            {
+                va_end(va);
+                return fcntl_f(fd, cmd);
+            }
+                break;
+            case F_SETLK:
+            case F_SETLKW:
+            case F_GETLK:
+            {
+                struct flock* arg = va_arg(va, struct flock*);
+                va_end(va);
+                return fcntl_f(fd, cmd, arg);
+            }
+                break;
+            case F_GETOWN_EX:
+            case F_SETOWN_EX:
+            {
+                struct f_owner_exlock* arg = va_arg(va, struct f_owner_exlock*);
+                va_end(va);
+                return fcntl_f(fd, cmd, arg);
+            }
+                break;
+            default:
+                va_end(va);
+                return fcntl_f(fd, cmd);
+        }
     }
 
 

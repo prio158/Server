@@ -28,13 +28,13 @@ namespace Server {
 
         bool isClose() const { return m_isClosed; }
 
-        void setUseNonBlock(bool v) { m_userNonBlock = v; }
+        void setUserNonblock(bool v) { m_userNonBlock = v; }
 
-        bool getUserNonBlock() const { return m_userNonBlock; }
+        bool getUserNonblock() const { return m_userNonBlock; }
 
-        void setSysNonBlock(bool v) { m_sysNonBlock = v; }
+        void setSysNonblock(bool v) { m_sysNonBlock = v; }
 
-        bool getSysNonBlock() const { return m_sysNonBlock; }
+        bool getSysNonblock() const { return m_sysNonBlock; }
 
         void setTimeout(int type, uint64_t v);
 
