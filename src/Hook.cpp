@@ -9,7 +9,8 @@
 #include "Log.h"
 #include "FdManager.h"
 #include <fcntl.h>
-#include <stdarg.h>
+#include <cstdarg>
+#include <sys/ioctl.h>
 
 namespace Server {
 
@@ -223,8 +224,86 @@ namespace Server {
         return fd;
     }
 
-    int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+    int connect_with_timeout(int fd, const struct sockaddr *addr, socklen_t addrlen, uint64_t timeout_ms) {
+        if (!t_hook_enable)
+            return connect_f(fd, addr, addrlen);
+        auto ctx = FdMgr::GetInstance()->get(fd);
 
+        if (!ctx || ctx->isSocket()) {
+            errno = EBADF;
+            return -1;
+        }
+
+        if (!ctx->isSocket())
+            return connect_f(fd, addr, addrlen);
+
+        if (!ctx->getUserNonblock()) {
+            return connect_f(fd, addr, addrlen);
+        }
+        int retryNum = 1;
+        int now = GetCurrentUS();
+        int n = connect_f(fd, addr, addrlen);
+        if (n == 0) return 0;
+        else if (n != -1 || errno != EINPROGRESS) return n;
+        auto ioSchedule = IOSchedule::GetThis();
+        Timer::ptr timer;
+        std::shared_ptr<timer_info> tinfo(new timer_info);
+        std::weak_ptr<timer_info> winfo(tinfo);
+        if (timeout_ms != (uint64_t) -1) {
+            timer = ioSchedule->addConditionTimer(timeout_ms, [winfo, fd, ioSchedule]() {
+                //lock:如果当前 weak_ptr 已经过期，则该函数会返回一个空的 shared_ptr 指针；
+                //反之，该函数返回一个和当前 weak_ptr 指向相同的 shared_ptr 指针。
+                auto t = winfo.lock();
+                if (!t || t->cancelled) {
+                    return;
+                }
+                //执行到这里就说明timeout_time时间到了，且WAIT任务没有被取消，
+                //那么状态置为超时，执行cancelEvent：取消掉事件的监听
+                t->cancelled = ETIMEDOUT;
+                ioSchedule->cancelEvent(fd, IOSchedule::WRITE);
+            }, winfo);
+        }
+        int rt = ioSchedule->addEvent(fd, IOSchedule::WRITE);
+        if (rt != 0) {
+            //添加失败
+            LOGE(LOG_ROOT()) << connect_with_timeout
+                             << " addEvent("
+                             << fd
+                             << ", "
+                             << IOSchedule::WRITE
+                             << " used time=" << (GetCurrentUS() - now)
+                             << " retry num=" << retryNum;
+            //ｅｖｅｎｔ添加失败，就取消上面的条件定时器任务，然后返回－１
+            if (timer) {
+                timer->cancel();
+            }
+            return -1;
+        } else {
+            //添加ｅｖｅｎｔ成功后，执行到这里会挂起，然后条件定时器执行回调中的cancelEvent的时候，会唤醒此处的挂起状态
+            //以及ioSchedule->addEvent执行后，也会唤醒此处．
+            Fiber::YieldToHold();
+            if (timer) {
+                timer->cancel();
+            }
+            //如果是定时任务取消的,返回，不进行ｒｅｔｒｙ　
+            if (tinfo->cancelled) {
+                errno = tinfo->cancelled;
+                return -1;
+            }
+        }
+        int error = 0;
+        socklen_t len = sizeof(socklen_t);
+        if (-1 == getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &len))
+            return -1;
+        if (!error) return 0;
+        else {
+            errno = error;
+            return -1;
+        }
+    }
+
+    int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
+        return connect_f(sockfd, addr, addrlen);
     }
 
     int accept(int s, struct sockaddr *addr, socklen_t *addrlen) {
@@ -304,20 +383,19 @@ namespace Server {
         // <Step 4> 获取所有的参数之后，将 ap 指针关掉。
         va_list va;
         va_start(va, cmd);
-        switch(cmd) {
-            case F_SETFL:
-            {
+        switch (cmd) {
+            case F_SETFL: {
                 //它的第一个参数是ap，第二个参数是要获取的参数的指定类型。按照指定类型获取当前参数，
                 //返回这个指定类型的值，然后把 ap 的位置指向变参表中下一个变量的位置；
                 int arg = va_arg(va, int);
                 va_end(va); //释放指针ｖａ，并将ｖａ置为ｎｕｌｌ
                 FdCtx::ptr ctx = FdMgr::GetInstance()->get(fd);
-                if(!ctx || ctx->isClose() || !ctx->isSocket()) {
+                if (!ctx || ctx->isClose() || !ctx->isSocket()) {
                     return fcntl_f(fd, cmd, arg);
                 }
                 // socket fd
                 ctx->setUserNonblock(arg & O_NONBLOCK);
-                if(ctx->getSysNonblock()) {
+                if (ctx->getSysNonblock()) {
                     arg |= O_NONBLOCK;
                 } else {
                     arg &= ~O_NONBLOCK;
@@ -325,15 +403,14 @@ namespace Server {
                 return fcntl_f(fd, cmd, arg);
             }
                 break;
-            case F_GETFL:
-            {
+            case F_GETFL: {
                 va_end(va);
                 int arg = fcntl_f(fd, cmd);
                 FdCtx::ptr ctx = FdMgr::GetInstance()->get(fd);
-                if(!ctx || ctx->isClose() || !ctx->isSocket()) {
+                if (!ctx || ctx->isClose() || !ctx->isSocket()) {
                     return arg;
                 }
-                if(ctx->getUserNonblock()) {
+                if (ctx->getUserNonblock()) {
                     return arg | O_NONBLOCK;
                 } else {
                     return arg & ~O_NONBLOCK;
@@ -370,17 +447,15 @@ namespace Server {
                 break;
             case F_SETLK:
             case F_SETLKW:
-            case F_GETLK:
-            {
-                struct flock* arg = va_arg(va, struct flock*);
+            case F_GETLK: {
+                struct flock *arg = va_arg(va, struct flock*);
                 va_end(va);
                 return fcntl_f(fd, cmd, arg);
             }
                 break;
             case F_GETOWN_EX:
-            case F_SETOWN_EX:
-            {
-                struct f_owner_exlock* arg = va_arg(va, struct f_owner_exlock*);
+            case F_SETOWN_EX: {
+                struct f_owner_exlock *arg = va_arg(va, struct f_owner_exlock*);
                 va_end(va);
                 return fcntl_f(fd, cmd, arg);
             }
@@ -391,19 +466,50 @@ namespace Server {
         }
     }
 
-
+    //ioctl(input/output control)是设备驱动程序中对设备的I/O通道进行管理的函数。
+    //所谓对I/O通道进行管理，就是对设备的一些特性进行控制，例如串口的传输波特率、马达的转速等等。
+    //通常，成功返回0。 失败返回 -1。 errno会被设置
     int ioctl(int d, unsigned long int request, ...) {
-
+        va_list va;
+        va_start(va, request);
+        void *arg = va_arg(va, void*);
+        va_end(va);
+        //允许或禁止套接口socket的非阻塞模式:如允许非阻塞模式则非零，如禁止非阻塞模式则为零
+        if (FIONBIO == request) {
+            bool user_nonblock = !!*(int *) arg;
+            FdCtx::ptr ctx = FdMgr::GetInstance()->get(d);
+            if (!ctx || ctx->isClose() || !ctx->isSocket()) {
+                return ioctl_f(d, request, arg);
+            }
+            ctx->setUserNonblock(user_nonblock);
+        }
+        return ioctl_f(d, request, arg);
     }
 
 
     int getsockopt(int sockfd, int level, int optname, void *optval, socklen_t *optlen) {
-
+        return getsockopt_f(sockfd, level, optname, optval, optlen);
     }
 
 
     int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen) {
-
+        if (!t_hook_enable) {
+            return setsockopt_f(sockfd, level, optname, optval, optlen);
+        }
+        //level是被设置的选项的级别，如果想要在套接字级别上设置选项，就必须把level设置为 SOL_SOCKET
+        //也就是说只有将ｌｅｖｅｌ设置为了SOL_SOCKET，optname才能设置：
+        //SO_RCVTIMEO，设置接收超时时间
+        //SO_SNDTIMEO，设置发送超时时间
+        if (level == SOL_SOCKET) {
+            if (optname == SO_RCVTIMEO || optname == SO_SNDTIMEO) {
+                auto ctx = FdMgr::GetInstance()->get(sockfd);
+                if (ctx) {
+                    const auto *v = (const timeval *) optval;
+                    ctx->setTimeout(optname, v->tv_sec * 1000 + v->tv_usec / 1000);
+                }
+            }
+        }
+        return setsockopt_f(sockfd, level, optname, optval, optlen);
     }
 
 
