@@ -11,10 +11,13 @@
 #include <fcntl.h>
 #include <cstdarg>
 #include <sys/ioctl.h>
+#include "Config.h"
 
 namespace Server {
 
     static thread_local bool t_hook_enable = false;
+    static ConfigVar<int>::ptr g_tcp_connect_timeout = Config::Lookup("tcp.connect.timeout", 5000,
+                                                                      "tcp connect timeout");
 
 #define HOOK_FUN(XX) \
         XX(sleep)       \
@@ -49,9 +52,16 @@ namespace Server {
 #undef XX
     }
 
+    static uint64_t s_connect_timeout = -1;
+
     struct _HookIniter {
         _HookIniter() {
             hook_init();
+            s_connect_timeout = g_tcp_connect_timeout->getValue();
+            g_tcp_connect_timeout->addChangeCallback([](const int &old_value, const int &new_value) {
+                LOGI(LOG_ROOT()) << "tcp connect timeout changed from";
+                s_connect_timeout = new_value;
+            });
         }
     };
 
@@ -78,6 +88,8 @@ namespace Server {
         if (!t_hook_enable) {
             return fun(fd, std::forward<Args>(args)...);
         }
+
+        //LOGD(LOG_ROOT()) << "do_io:" << hook_fun_name;
 
         FdCtx::ptr ctx = FdMgr::GetInstance()->get(fd);
         //如果ｆｄ不存在，执行originFun
@@ -225,8 +237,10 @@ namespace Server {
     }
 
     int connect_with_timeout(int fd, const struct sockaddr *addr, socklen_t addrlen, uint64_t timeout_ms) {
+
         if (!t_hook_enable)
             return connect_f(fd, addr, addrlen);
+
         auto ctx = FdMgr::GetInstance()->get(fd);
 
         if (!ctx || ctx->isSocket()) {
@@ -303,7 +317,8 @@ namespace Server {
     }
 
     int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen) {
-        return connect_f(sockfd, addr, addrlen);
+        LOGI(LOG_ROOT()) << "hook connect " << "s_connect_timeout=" << s_connect_timeout;
+        return connect_with_timeout(sockfd, addr, addrlen, s_connect_timeout);
     }
 
     int accept(int s, struct sockaddr *addr, socklen_t *addrlen) {
@@ -344,11 +359,9 @@ namespace Server {
         return do_io(fd, writev_f, "writev", IOSchedule::WRITE, SO_SNDTIMEO, iov, iovcnt);
     }
 
-
     ssize_t send(int s, const void *msg, size_t len, int flags) {
-        return do_io(s, send, "send", IOSchedule::WRITE, SO_SNDTIMEO, msg, len, flags);
+        return do_io(s, send_f, "send", IOSchedule::WRITE, SO_SNDTIMEO, msg, len, flags);
     }
-
 
     ssize_t sendto(int s, const void *msg, size_t len, int flags, const struct sockaddr *to,
                    socklen_t tolen) {
